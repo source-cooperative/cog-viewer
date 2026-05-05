@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useSyncExternalStore } from "react";
-import type { CogState, CogStateUpdate, Mode } from "./types";
+import type { Basemap, CogState, CogStateUpdate, Mode } from "./types";
 
 const VALID_MODES: Mode[] = ["rgb", "single"];
+const VALID_BASEMAPS: Basemap[] = ["auto", "light", "dark", "satellite", "off"];
 
 const parseRescale = (raw: string | null): [number, number][] | null => {
   if (!raw) return null;
@@ -23,6 +24,7 @@ const parseNodata = (raw: string | null): number | "off" | null => {
 
 export function parseCogState(p: URLSearchParams): CogState {
   const modeRaw = p.get("mode");
+  const basemapRaw = p.get("basemap");
   return {
     url: p.get("url"),
     mode: VALID_MODES.includes(modeRaw as Mode) ? (modeRaw as Mode) : null,
@@ -32,6 +34,9 @@ export function parseCogState(p: URLSearchParams): CogState {
     nodata: parseNodata(p.get("nodata")),
     opacity: p.has("opacity") ? Number(p.get("opacity")) : 1,
     colorspace: p.get("colorspace"),
+    basemap: VALID_BASEMAPS.includes(basemapRaw as Basemap)
+      ? (basemapRaw as Basemap)
+      : "auto",
   };
 }
 
@@ -45,6 +50,7 @@ export function serializeCogState(s: CogState): URLSearchParams {
   if (s.nodata !== null) p.set("nodata", String(s.nodata));
   if (s.opacity !== 1) p.set("opacity", String(s.opacity));
   if (s.colorspace) p.set("colorspace", s.colorspace);
+  if (s.basemap !== "auto") p.set("basemap", s.basemap);
   return p;
 }
 
