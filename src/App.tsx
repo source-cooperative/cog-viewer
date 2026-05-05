@@ -57,12 +57,14 @@ export default function App() {
   const [geotiff, setGeotiff] = useState<GeoTIFF | null>(null);
   const [autoStats, setAutoStats] = useState<AutoStats | null>(null);
   const [bandCount, setBandCount] = useState<number | null>(null);
+  const [bandNames, setBandNames] = useState<Map<number, string> | null>(null);
 
   // Reset captured GeoTIFF + stats when the URL changes.
   useEffect(() => {
     setGeotiff(null);
     setAutoStats(null);
     setBandCount(null);
+    setBandNames(null);
   }, [state.url]);
 
   // When we have a GeoTIFF for the current URL, compute auto-stats once.
@@ -119,6 +121,7 @@ export default function App() {
       ) => {
         setGeotiff(tiff);
         setBandCount(readBandCount(tiff));
+        setBandNames(readBandNames(tiff));
         const { west, south, east, north } = options.geographicBounds;
         mapRef.current?.fitBounds(
           [
@@ -194,6 +197,7 @@ export default function App() {
         state={state}
         update={update}
         bandCount={bandCount}
+        bandNames={bandNames}
         autoStats={autoStats}
       />
 

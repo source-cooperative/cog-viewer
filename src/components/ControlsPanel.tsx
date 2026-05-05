@@ -17,8 +17,14 @@ type Props = {
   state: CogState;
   update: (patch: CogStateUpdate) => void;
   bandCount: number | null;
+  bandNames: Map<number, string> | null;
   autoStats: AutoStats | null;
 };
+
+function bandLabel(idx: number, names: Map<number, string> | null): string {
+  const name = names?.get(idx);
+  return name ? `${idx} — ${name}` : String(idx);
+}
 
 function statsForBands(
   autoStats: AutoStats | null,
@@ -55,7 +61,13 @@ function Field({
   );
 }
 
-export function ControlsPanel({ state, update, bandCount, autoStats }: Props) {
+export function ControlsPanel({
+  state,
+  update,
+  bandCount,
+  bandNames,
+  autoStats,
+}: Props) {
   const open = state.panel === "open";
   const setOpen = (next: boolean) =>
     update({ panel: next ? "open" : "closed" });
@@ -171,7 +183,7 @@ export function ControlsPanel({ state, update, bandCount, autoStats }: Props) {
                       >
                         {bandOptions.map((n) => (
                           <option key={n} value={n}>
-                            {n}
+                            {bandLabel(n, bandNames)}
                           </option>
                         ))}
                       </select>
