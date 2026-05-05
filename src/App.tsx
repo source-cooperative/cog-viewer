@@ -16,13 +16,18 @@ import { resolveBasemap } from "./basemaps";
 import { ControlsPanel } from "./components/ControlsPanel";
 import { EmptyState } from "./components/EmptyState";
 import {
-  buildRgbRenderTile,
-  buildSingleRenderTile,
+  buildRgbCompositeRenderTile,
+  buildSingleCompositeRenderTile,
 } from "./render/render-pipeline";
-import { computeAutoStats, readBandCount, type AutoStats } from "./render/stats";
 import {
-  makeRgbaTileLoader,
-  makeSingleTileLoader,
+  computeAutoStats,
+  readBandCount,
+  readBandNames,
+  type AutoStats,
+} from "./render/stats";
+import {
+  makeMultiBandTileLoader,
+  MAX_BAND_SLOTS,
 } from "./render/tile-loader";
 import { useCogState } from "./state/useCogState";
 
@@ -125,18 +130,23 @@ export default function App() {
       },
     };
 
+    // Always fetch a stable prefix of bands so the layer id stays the same
+    // across band-selection changes (and across the initial bandCount
+    // resolution). The loader silently skips indexes beyond the COG's
+    // actual band count, so this is safe for COGs with fewer than
+    // MAX_BAND_SLOTS bands.
+    const fetchedBands = Array.from(
+      { length: MAX_BAND_SLOTS },
+      (_, i) => i + 1,
+    );
+    const cacheKey = "cog:custom";
+
     if (state.mode === "rgb" && state.bands && state.bands.length > 0) {
-      const key = [
-        "rgb",
-        state.bands.join(","),
-        state.rescale?.[0]?.join(",") ?? "",
-        String(state.nodata),
-      ].join("|");
       return new COGLayer({
         ...baseProps,
-        id: `cog:${key}`,
-        getTileData: makeRgbaTileLoader(state.bands),
-        renderTile: buildRgbRenderTile(state),
+        id: cacheKey,
+        getTileData: makeMultiBandTileLoader(fetchedBands),
+        renderTile: buildRgbCompositeRenderTile(state),
       });
     }
 
@@ -146,18 +156,11 @@ export default function App() {
       state.bands.length > 0 &&
       colormapTexture
     ) {
-      const key = [
-        "single",
-        String(state.bands[0]),
-        state.rescale?.[0]?.join(",") ?? "",
-        String(state.nodata),
-        state.colormap ?? "viridis",
-      ].join("|");
       return new COGLayer({
         ...baseProps,
-        id: `cog:${key}`,
-        getTileData: makeSingleTileLoader(state.bands[0]),
-        renderTile: buildSingleRenderTile(state, colormapTexture),
+        id: cacheKey,
+        getTileData: makeMultiBandTileLoader(fetchedBands),
+        renderTile: buildSingleCompositeRenderTile(state, colormapTexture),
       });
     }
 

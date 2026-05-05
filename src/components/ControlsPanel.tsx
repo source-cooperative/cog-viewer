@@ -1,5 +1,6 @@
 import { COLORMAP_INDEX } from "@developmentseed/deck.gl-raster/gpu-modules";
 import type { AutoStats } from "../render/stats";
+import { MAX_BAND_SLOTS } from "../render/tile-loader";
 import type { Basemap, CogState, CogStateUpdate, Mode } from "../state/types";
 
 const COLORMAP_NAMES = Object.keys(COLORMAP_INDEX).sort();
@@ -63,9 +64,13 @@ export function ControlsPanel({ state, update, bandCount, autoStats }: Props) {
   const auto = statsForBands(autoStats, effectiveBands);
   const effectiveRescale = state.rescale?.[0] ?? auto ?? [0, 1];
   const isAutoRescale = state.rescale === null;
-  const bandOptions = bandCount
-    ? Array.from({ length: bandCount }, (_, i) => i + 1)
-    : [1, 2, 3, 4];
+  // CompositeBands has 4 slots; we always fetch the first up-to-4 bands so
+  // users can freely swap among them. Bands beyond that aren't reachable
+  // without a re-fetch, so we hide them from the picker.
+  const bandOptions = Array.from(
+    { length: Math.min(bandCount ?? MAX_BAND_SLOTS, MAX_BAND_SLOTS) },
+    (_, i) => i + 1,
+  );
 
   return (
     <div

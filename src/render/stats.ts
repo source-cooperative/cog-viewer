@@ -7,6 +7,30 @@ export function readBandCount(tiff: GeoTIFF): number | null {
   return typeof v === "number" && v > 0 ? v : null;
 }
 
+/**
+ * Parse band descriptions from the GDAL_METADATA XML tag. Looks for
+ * `<Item name="DESCRIPTION" sample="N">name</Item>` (and a few common
+ * aliases) and returns a 1-indexed band → name map. The geotiff package
+ * surfaces statistics from this XML but not descriptions, so we re-parse.
+ */
+export function readBandNames(tiff: GeoTIFF): Map<number, string> | null {
+  const xml = tiff.image.value(TiffTag.GdalMetadata);
+  if (typeof xml !== "string" || xml.length === 0) return null;
+  const doc = new DOMParser().parseFromString(xml, "text/xml");
+  const out = new Map<number, string>();
+  for (const item of Array.from(doc.querySelectorAll("Item"))) {
+    const name = item.getAttribute("name");
+    const sample = item.getAttribute("sample");
+    if (sample === null) continue;
+    if (name !== "DESCRIPTION" && name !== "BAND_NAME") continue;
+    const text = item.textContent?.trim() ?? "";
+    if (!text) continue;
+    const idx = parseInt(sample, 10) + 1;
+    if (Number.isFinite(idx) && idx > 0) out.set(idx, text);
+  }
+  return out.size > 0 ? out : null;
+}
+
 export type AutoStats = {
   /** Per-band 1-indexed [min, max] from the COG. Null when stats are unknown. */
   perBand: Map<number, [number, number]> | null;

@@ -3,15 +3,16 @@ import type {
   RenderTileResult,
 } from "@developmentseed/deck.gl-raster";
 import {
+  buildCompositeBandsProps,
   COLORMAP_INDEX,
   Colormap,
-  CreateTexture,
+  CompositeBands,
   FilterNoDataVal,
   LinearRescale,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import type { Texture } from "@luma.gl/core";
 import type { CogState } from "../state/types";
-import type { TileTextureData } from "./tile-loader";
+import type { MultiBandTileData } from "./tile-loader";
 
 type Range = [number, number];
 
@@ -19,18 +20,11 @@ const RESCALE_EPSILON = 1e-9;
 const safeRange = ([lo, hi]: Range): Range =>
   lo === hi ? [lo, lo + RESCALE_EPSILON] : [lo, hi];
 
-/** Default rescale used when the user hasn't picked one and the COG dtype
- * suggests it. uint8 sources don't need a rescale; uint16 reflectance
- * (Sentinel-2-like) lands in roughly [0, 0.15] after r16unorm normalization. */
-function defaultRescaleFor(_state: CogState): Range | null {
-  return null;
-}
-
 function effectiveRescale(state: CogState): Range | null {
   if (state.rescale && state.rescale.length > 0) {
     return safeRange(state.rescale[0]);
   }
-  return defaultRescaleFor(state);
+  return null;
 }
 
 function effectiveNodata(
@@ -42,10 +36,21 @@ function effectiveNodata(
   return perTileNodata;
 }
 
-export function buildRgbRenderTile(state: CogState) {
-  return function renderTile(data: TileTextureData): RenderTileResult {
+/** RGB renderTile: composes user-selected bands into RGB via
+ * `CompositeBands`, then rescales and discards nodata. Re-renders without
+ * a re-fetch when the selection changes (within the cached band set). */
+export function buildRgbCompositeRenderTile(state: CogState) {
+  return function renderTile(data: MultiBandTileData): RenderTileResult {
+    const bands = state.bands ?? [1, 2, 3];
+    const mapping: { r: string; g?: string; b?: string } = {
+      r: String(bands[0] ?? bands[bands.length - 1] ?? 1),
+    };
+    if (bands[1] != null) mapping.g = String(bands[1]);
+    if (bands[2] != null) mapping.b = String(bands[2]);
+
+    const compositeProps = buildCompositeBandsProps(mapping, data.bands);
     const pipeline: RasterModule[] = [
-      { module: CreateTexture, props: { textureName: data.texture } },
+      { module: CompositeBands, props: compositeProps },
     ];
 
     const rescale = effectiveRescale(state);
@@ -65,20 +70,24 @@ export function buildRgbRenderTile(state: CogState) {
   };
 }
 
-/**
- * Build a renderTile for single-band display: rescale, look up a colormap,
- * and discard nodata. The COLORMAP_INDEX shipped by deck.gl-raster maps
- * lowercase names like "viridis" to indices into the colormap sprite. */
-export function buildSingleRenderTile(
+/** Single-band renderTile. Uses CompositeBands to broadcast one band into
+ * all RGB output channels (so the colormap can sample `color.r`), then
+ * rescales, colormaps, and discards nodata. */
+export function buildSingleCompositeRenderTile(
   state: CogState,
   colormapTexture: Texture,
 ) {
   const name = (state.colormap ?? "viridis").toLowerCase();
   const colormapIndex =
     (COLORMAP_INDEX as Record<string, number>)[name] ?? COLORMAP_INDEX.viridis;
-  return function renderTile(data: TileTextureData): RenderTileResult {
+  return function renderTile(data: MultiBandTileData): RenderTileResult {
+    const band = String(state.bands?.[0] ?? 1);
+    const compositeProps = buildCompositeBandsProps(
+      { r: band, g: band, b: band },
+      data.bands,
+    );
     const pipeline: RasterModule[] = [
-      { module: CreateTexture, props: { textureName: data.texture } },
+      { module: CompositeBands, props: compositeProps },
     ];
 
     const rescale = effectiveRescale(state);
