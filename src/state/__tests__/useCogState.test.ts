@@ -69,6 +69,7 @@ describe("serializeCogState", () => {
       opacity: 1,
       colorspace: null,
       basemap: "auto",
+      panel: "closed",
     });
     expect(out.toString()).toBe("url=https%3A%2F%2Fx.tif");
   });
@@ -84,6 +85,7 @@ describe("serializeCogState", () => {
       opacity: 1,
       colorspace: null,
       basemap: "auto",
+      panel: "closed",
     });
     expect(out.toString()).toBe("");
   });

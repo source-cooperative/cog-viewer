@@ -1,8 +1,15 @@
 import { useCallback, useMemo, useSyncExternalStore } from "react";
-import type { Basemap, CogState, CogStateUpdate, Mode } from "./types";
+import type {
+  Basemap,
+  CogState,
+  CogStateUpdate,
+  Mode,
+  PanelState,
+} from "./types";
 
 const VALID_MODES: Mode[] = ["rgb", "single"];
 const VALID_BASEMAPS: Basemap[] = ["auto", "light", "dark", "satellite", "off"];
+const VALID_PANEL: PanelState[] = ["open", "closed"];
 
 const parseRescale = (raw: string | null): [number, number][] | null => {
   if (!raw) return null;
@@ -37,6 +44,9 @@ export function parseCogState(p: URLSearchParams): CogState {
     basemap: VALID_BASEMAPS.includes(basemapRaw as Basemap)
       ? (basemapRaw as Basemap)
       : "auto",
+    panel: VALID_PANEL.includes(p.get("panel") as PanelState)
+      ? (p.get("panel") as PanelState)
+      : "closed",
   };
 }
 
@@ -51,6 +61,7 @@ export function serializeCogState(s: CogState): URLSearchParams {
   if (s.opacity !== 1) p.set("opacity", String(s.opacity));
   if (s.colorspace) p.set("colorspace", s.colorspace);
   if (s.basemap !== "auto") p.set("basemap", s.basemap);
+  if (s.panel !== "closed") p.set("panel", s.panel);
   return p;
 }
 

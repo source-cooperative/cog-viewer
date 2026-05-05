@@ -1,5 +1,4 @@
 import { COLORMAP_INDEX } from "@developmentseed/deck.gl-raster/gpu-modules";
-import { useState } from "react";
 import type { Basemap, CogState, CogStateUpdate, Mode } from "../state/types";
 
 const COLORMAP_NAMES = Object.keys(COLORMAP_INDEX).sort();
@@ -33,7 +32,9 @@ function Field({
 }
 
 export function ControlsPanel({ state, update }: Props) {
-  const [open, setOpen] = useState(true);
+  const open = state.panel === "open";
+  const setOpen = (next: boolean) =>
+    update({ panel: next ? "open" : "closed" });
 
   const effectiveBands = state.bands ?? [1, 2, 3];
   const effectiveRescale = state.rescale?.[0] ?? [0, 1];
@@ -45,18 +46,21 @@ export function ControlsPanel({ state, update }: Props) {
         position: "absolute",
         top: 16,
         right: 16,
-        width: 320,
-        padding: 14,
+        width: 280,
+        maxWidth: "calc(100vw - 32px)",
+        padding: open ? 14 : "8px 12px",
         zIndex: 5,
         display: "grid",
-        gap: 12,
+        gap: open ? 12 : 0,
         maxHeight: "calc(100vh - 32px)",
+        overflowX: "hidden",
         overflowY: "auto",
+        boxSizing: "border-box",
       }}
     >
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => setOpen(!open)}
         style={{
           all: "unset",
           cursor: "pointer",
@@ -65,7 +69,7 @@ export function ControlsPanel({ state, update }: Props) {
           alignItems: "center",
         }}
       >
-        <span className="panel-header">COG Viewer</span>
+        <span className="panel-header">Options</span>
         <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
           {open ? "▾" : "◂"}
         </span>
@@ -93,10 +97,6 @@ export function ControlsPanel({ state, update }: Props) {
             <>
               <hr className="divider" />
 
-              <div className="mono" style={{ color: "var(--text-muted)", wordBreak: "break-all" }}>
-                {state.url}
-              </div>
-
               <Field label="Mode">
                 <select
                   aria-label="mode"
@@ -118,7 +118,13 @@ export function ControlsPanel({ state, update }: Props) {
 
               {state.mode === "rgb" && (
                 <Field label="Bands (R, G, B, 1-indexed)">
-                  <div style={{ display: "flex", gap: 6 }}>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                      gap: 6,
+                    }}
+                  >
                     {(["R", "G", "B"] as const).map((label, i) => (
                       <input
                         key={label}
@@ -132,7 +138,6 @@ export function ControlsPanel({ state, update }: Props) {
                           next[i] = Number.isFinite(n) && n >= 1 ? n : 1;
                           update({ bands: next });
                         }}
-                        style={{ width: 64 }}
                       />
                     ))}
                   </div>
@@ -152,13 +157,18 @@ export function ControlsPanel({ state, update }: Props) {
                         bands: [Number.isFinite(n) && n >= 1 ? n : 1],
                       });
                     }}
-                    style={{ width: 80 }}
                   />
                 </Field>
               )}
 
               <Field label="Rescale (min, max)">
-                <div style={{ display: "flex", gap: 6 }}>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
+                    gap: 6,
+                  }}
+                >
                   <input
                     aria-label="rescale-min"
                     type="number"
@@ -171,7 +181,6 @@ export function ControlsPanel({ state, update }: Props) {
                         ],
                       })
                     }
-                    style={{ flex: 1 }}
                   />
                   <input
                     aria-label="rescale-max"
@@ -185,7 +194,6 @@ export function ControlsPanel({ state, update }: Props) {
                         ],
                       })
                     }
-                    style={{ flex: 1 }}
                   />
                 </div>
               </Field>
@@ -207,7 +215,16 @@ export function ControlsPanel({ state, update }: Props) {
               )}
 
               <Field label="Nodata">
-                <div style={{ display: "flex", gap: 6 }}>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns:
+                      typeof state.nodata === "number"
+                        ? "minmax(0, 1fr) minmax(0, 1fr)"
+                        : "minmax(0, 1fr)",
+                    gap: 6,
+                  }}
+                >
                   <select
                     aria-label="nodata-mode"
                     value={
@@ -223,7 +240,6 @@ export function ControlsPanel({ state, update }: Props) {
                       else if (v === "off") update({ nodata: "off" });
                       else update({ nodata: 0 });
                     }}
-                    style={{ flex: 1 }}
                   >
                     <option value="auto">Auto (from COG)</option>
                     <option value="value">Value</option>
@@ -238,7 +254,6 @@ export function ControlsPanel({ state, update }: Props) {
                       onChange={(e) =>
                         update({ nodata: Number(e.target.value) })
                       }
-                      style={{ width: 100 }}
                     />
                   )}
                 </div>
@@ -258,22 +273,6 @@ export function ControlsPanel({ state, update }: Props) {
                 />
               </Field>
 
-              <button
-                type="button"
-                onClick={() =>
-                  update({
-                    url: null,
-                    mode: null,
-                    bands: null,
-                    rescale: null,
-                    colormap: null,
-                    nodata: null,
-                    colorspace: null,
-                  })
-                }
-              >
-                Open another COG
-              </button>
             </>
           )}
         </>
