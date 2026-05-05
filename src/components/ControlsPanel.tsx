@@ -1,4 +1,5 @@
 import { COLORMAP_INDEX } from "@developmentseed/deck.gl-raster/gpu-modules";
+import type { AutoStats } from "../render/stats";
 import type { Basemap, CogState, CogStateUpdate, Mode } from "../state/types";
 
 const COLORMAP_NAMES = Object.keys(COLORMAP_INDEX).sort();
@@ -14,7 +15,29 @@ const BASEMAP_OPTIONS: { value: Basemap; label: string }[] = [
 type Props = {
   state: CogState;
   update: (patch: CogStateUpdate) => void;
+  bandCount: number | null;
+  autoStats: AutoStats | null;
 };
+
+function statsForBands(
+  autoStats: AutoStats | null,
+  bands: number[],
+): [number, number] | null {
+  if (!autoStats?.perBand) return null;
+  const ranges: [number, number][] = [];
+  for (const b of bands) {
+    const r = autoStats.perBand.get(b);
+    if (r) ranges.push(r);
+  }
+  if (ranges.length === 0) return autoStats.global;
+  let lo = 0;
+  let hi = 0;
+  for (const [a, b] of ranges) {
+    lo += a;
+    hi += b;
+  }
+  return [lo / ranges.length, hi / ranges.length];
+}
 
 function Field({
   label,
@@ -31,13 +54,18 @@ function Field({
   );
 }
 
-export function ControlsPanel({ state, update }: Props) {
+export function ControlsPanel({ state, update, bandCount, autoStats }: Props) {
   const open = state.panel === "open";
   const setOpen = (next: boolean) =>
     update({ panel: next ? "open" : "closed" });
 
   const effectiveBands = state.bands ?? [1, 2, 3];
-  const effectiveRescale = state.rescale?.[0] ?? [0, 1];
+  const auto = statsForBands(autoStats, effectiveBands);
+  const effectiveRescale = state.rescale?.[0] ?? auto ?? [0, 1];
+  const isAutoRescale = state.rescale === null;
+  const bandOptions = bandCount
+    ? Array.from({ length: bandCount }, (_, i) => i + 1)
+    : [1, 2, 3, 4];
 
   return (
     <div
@@ -117,7 +145,7 @@ export function ControlsPanel({ state, update }: Props) {
               </Field>
 
               {state.mode === "rgb" && (
-                <Field label="Bands (R, G, B, 1-indexed)">
+                <Field label="Bands (R, G, B)">
                   <div
                     style={{
                       display: "grid",
@@ -126,42 +154,52 @@ export function ControlsPanel({ state, update }: Props) {
                     }}
                   >
                     {(["R", "G", "B"] as const).map((label, i) => (
-                      <input
+                      <select
                         key={label}
                         aria-label={`band-${label.toLowerCase()}`}
-                        type="number"
-                        min={1}
-                        value={effectiveBands[i] ?? ""}
+                        value={effectiveBands[i] ?? bandOptions[0]}
                         onChange={(e) => {
-                          const n = Number(e.target.value);
                           const next = [...effectiveBands];
-                          next[i] = Number.isFinite(n) && n >= 1 ? n : 1;
+                          next[i] = Number(e.target.value);
                           update({ bands: next });
                         }}
-                      />
+                      >
+                        {bandOptions.map((n) => (
+                          <option key={n} value={n}>
+                            {n}
+                          </option>
+                        ))}
+                      </select>
                     ))}
                   </div>
                 </Field>
               )}
 
               {state.mode === "single" && (
-                <Field label="Band (1-indexed)">
-                  <input
+                <Field label="Band">
+                  <select
                     aria-label="band"
-                    type="number"
-                    min={1}
                     value={effectiveBands[0] ?? 1}
-                    onChange={(e) => {
-                      const n = Number(e.target.value);
-                      update({
-                        bands: [Number.isFinite(n) && n >= 1 ? n : 1],
-                      });
-                    }}
-                  />
+                    onChange={(e) =>
+                      update({ bands: [Number(e.target.value)] })
+                    }
+                  >
+                    {bandOptions.map((n) => (
+                      <option key={n} value={n}>
+                        {n}
+                      </option>
+                    ))}
+                  </select>
                 </Field>
               )}
 
-              <Field label="Rescale (min, max)">
+              <Field
+                label={
+                  isAutoRescale && auto
+                    ? "Rescale (min, max) — auto"
+                    : "Rescale (min, max)"
+                }
+              >
                 <div
                   style={{
                     display: "grid",
@@ -196,6 +234,19 @@ export function ControlsPanel({ state, update }: Props) {
                     }
                   />
                 </div>
+                {!isAutoRescale && auto && (
+                  <button
+                    type="button"
+                    onClick={() => update({ rescale: null })}
+                    style={{
+                      justifySelf: "start",
+                      padding: "2px 8px",
+                      fontSize: 11,
+                    }}
+                  >
+                    Reset to auto
+                  </button>
+                )}
               </Field>
 
               {state.mode === "single" && (

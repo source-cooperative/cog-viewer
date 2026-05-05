@@ -6,6 +6,7 @@ import {
   decodeColormapSprite,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import colormapsPngUrl from "@developmentseed/deck.gl-raster/gpu-modules/colormaps.png";
+import type { GeoTIFF } from "@developmentseed/geotiff";
 import type { Device, Texture } from "@luma.gl/core";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -18,6 +19,7 @@ import {
   buildRgbRenderTile,
   buildSingleRenderTile,
 } from "./render/render-pipeline";
+import { computeAutoStats, readBandCount, type AutoStats } from "./render/stats";
 import {
   makeRgbaTileLoader,
   makeSingleTileLoader,
@@ -47,6 +49,31 @@ export default function App() {
   const prefersDark = usePrefersDark();
   const [device, setDevice] = useState<Device | null>(null);
   const [colormapTexture, setColormapTexture] = useState<Texture | null>(null);
+  const [geotiff, setGeotiff] = useState<GeoTIFF | null>(null);
+  const [autoStats, setAutoStats] = useState<AutoStats | null>(null);
+  const [bandCount, setBandCount] = useState<number | null>(null);
+
+  // Reset captured GeoTIFF + stats when the URL changes.
+  useEffect(() => {
+    setGeotiff(null);
+    setAutoStats(null);
+    setBandCount(null);
+  }, [state.url]);
+
+  // When we have a GeoTIFF for the current URL, compute auto-stats once.
+  useEffect(() => {
+    if (!geotiff) return;
+    const ctrl = new AbortController();
+    (async () => {
+      try {
+        const stats = await computeAutoStats(geotiff, ctrl.signal);
+        if (!ctrl.signal.aborted) setAutoStats(stats);
+      } catch (err) {
+        if (!ctrl.signal.aborted) console.warn("auto-stats failed", err);
+      }
+    })();
+    return () => ctrl.abort();
+  }, [geotiff]);
 
   useEffect(() => {
     if (!device) return;
@@ -71,11 +98,13 @@ export default function App() {
       geotiff: state.url,
       opacity: state.opacity,
       onGeoTIFFLoad: (
-        _tiff: unknown,
+        tiff: GeoTIFF,
         options: {
           geographicBounds: { west: number; south: number; east: number; north: number };
         },
       ) => {
+        setGeotiff(tiff);
+        setBandCount(readBandCount(tiff));
         const { west, south, east, north } = options.geographicBounds;
         mapRef.current?.fitBounds(
           [
@@ -149,7 +178,12 @@ export default function App() {
         />
       </MaplibreMap>
 
-      <ControlsPanel state={state} update={update} />
+      <ControlsPanel
+        state={state}
+        update={update}
+        bandCount={bandCount}
+        autoStats={autoStats}
+      />
 
       {!state.url && <EmptyState onSubmit={(url) => update({ url })} />}
     </div>
