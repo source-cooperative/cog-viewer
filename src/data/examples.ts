@@ -1,0 +1,28 @@
+export type CogExample = {
+  title: string;
+  url: string;
+  attribution?: string;
+};
+
+export const EXAMPLES: CogExample[] = [
+  {
+    title: "Sentinel-2 True Color (New York, 2026)",
+    url: "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2026/1/S2B_18TWL_20260101_0_L2A/TCI.tif",
+  },
+  {
+    title: "New Zealand 2024-2025 10m RGB",
+    url: "https://nz-imagery.s3-ap-southeast-2.amazonaws.com/new-zealand/new-zealand_2024-2025_10m/rgb/2193/CC11.tiff",
+  },
+  {
+    title: "NAIP Aerial (New York, 2022)",
+    url: "https://ds-wheels.s3.us-east-1.amazonaws.com/m_4007307_sw_18_060_20220803.tif",
+  },
+  {
+    title: "NLCD Land Cover 2023",
+    url: "https://ds-wheels.s3.us-east-1.amazonaws.com/Annual_NLCD_LndCov_2023_CU_C1V0.tif",
+  },
+  {
+    title: "Anderson Co. Ortho Pan 2ft (2000)",
+    url: "https://data.source.coop/giswqs/tn-imagery/imagery/AndersonCo_OrthoPan_2ft_2000.tif",
+  },
+];
