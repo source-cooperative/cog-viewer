@@ -1,1 +1,1 @@
-{"root":["./src/app.tsx","./src/main.tsx","./src/test-setup.ts","./src/vite-env.d.ts"],"version":"5.9.3"}
+{"root":["./src/app.tsx","./src/main.tsx","./src/test-setup.ts","./src/vite-env.d.ts","./src/__tests__/smoke.test.ts","./src/components/emptystate.tsx","./src/components/__tests__/emptystate.test.tsx","./src/data/examples.ts","./src/state/types.ts","./src/state/usecogstate.ts","./src/state/__tests__/usecogstate.test.ts"],"version":"5.9.3"}
