@@ -6,7 +6,7 @@ import {
   decodeColormapSprite,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import colormapsPngUrl from "@developmentseed/deck.gl-raster/gpu-modules/colormaps.png";
-import type { GeoTIFF } from "@developmentseed/geotiff";
+import { GeoTIFF } from "@developmentseed/geotiff";
 import type { Device, Texture } from "@luma.gl/core";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -59,12 +59,47 @@ export default function App() {
   const [bandCount, setBandCount] = useState<number | null>(null);
   const [bandNames, setBandNames] = useState<Map<number, string> | null>(null);
 
-  // Reset captured GeoTIFF + stats when the URL changes.
+  // Construct the GeoTIFF instance ourselves with a 1 MB chunk size instead
+  // of letting COGLayer call GeoTIFF.fromUrl(url) (which uses the published
+  // 0.6.1 default of 32 KB).
+  //
+  // Why: when an S3 bucket doesn't expose `Content-Range` via CORS (no
+  // `Access-Control-Expose-Headers`), the geotiff library's SourceHttp falls
+  // back to reading `Content-Length` from the 206 response and treats *that*
+  // (= the chunk size) as the whole-file size. Then `getMaxLength(offset,
+  // length)` returns a NEGATIVE value when the IFD chain points past the
+  // assumed file end, producing a malformed `bytes=START-END` Range header
+  // (end < start). S3 ignores the bad range and serves the entire file with
+  // status 200. For NLCD that's a 1.4 GB download per page load.
+  //
+  // Bumping the prefetch chunk to 1 MB matches the fix on
+  // @developmentseed/deck.gl-raster main (ref deck.gl-raster#294,
+  // blacha/cogeotiff#1431) — large enough that most COGs' IFD chains fit in
+  // the very first range request, so no second range request is needed and
+  // the `getMaxLength` bug never trips. Remove this workaround once
+  // @developmentseed/geotiff publishes the new default (post-0.6.1).
   useEffect(() => {
     setGeotiff(null);
     setAutoStats(null);
     setBandCount(null);
     setBandNames(null);
+    const url = state.url;
+    if (!url) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const tiff = await GeoTIFF.fromUrl(url, {
+          chunkSize: 1024 * 1024,
+          cacheSize: 10 * 1024 * 1024,
+        });
+        if (!cancelled) setGeotiff(tiff);
+      } catch (err) {
+        if (!cancelled) console.error("GeoTIFF.fromUrl failed", err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [state.url]);
 
   // When we have a GeoTIFF for the current URL, compute auto-stats once.
@@ -107,7 +142,10 @@ export default function App() {
   }, [device]);
 
   const layer = useMemo(() => {
-    if (!state.url) return null;
+    // Wait until we've constructed the GeoTIFF with our own chunk size. The
+    // URL-only fast path is intentionally gone — see the workaround comment
+    // above on why we hand a pre-built GeoTIFF instance to COGLayer.
+    if (!geotiff) return null;
 
     // Always mount the custom path (stable id "cog") so the tile cache
     // survives every mode/band/rescale/colormap toggle. Single-band mode
@@ -125,7 +163,7 @@ export default function App() {
 
     return new COGLayer({
       id: "cog",
-      geotiff: state.url,
+      geotiff,
       opacity: state.opacity,
       getTileData: makeMultiBandTileLoader(fetchedBands),
       renderTile,
@@ -135,7 +173,6 @@ export default function App() {
           geographicBounds: { west: number; south: number; east: number; north: number };
         },
       ) => {
-        setGeotiff(tiff);
         setBandCount(readBandCount(tiff));
         setBandNames(readBandNames(tiff));
         const { west, south, east, north } = options.geographicBounds;
@@ -149,7 +186,7 @@ export default function App() {
       },
     });
   }, [
-    state.url,
+    geotiff,
     state.opacity,
     state.mode,
     state.bands,
