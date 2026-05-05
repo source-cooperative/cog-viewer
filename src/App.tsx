@@ -89,17 +89,17 @@ export default function App() {
     };
 
     if (state.mode === "rgb" && state.bands && state.bands.length > 0) {
-      const bandsKey = state.bands.join(",");
-      const rescaleKey = state.rescale?.[0]?.join(",") ?? "";
-      const nodataKey = String(state.nodata);
+      const key = [
+        "rgb",
+        state.bands.join(","),
+        state.rescale?.[0]?.join(",") ?? "",
+        String(state.nodata),
+      ].join("|");
       return new COGLayer({
         ...baseProps,
+        id: `cog:${key}`,
         getTileData: makeRgbaTileLoader(state.bands),
         renderTile: buildRgbRenderTile(state),
-        updateTriggers: {
-          getTileData: [bandsKey],
-          renderTile: [bandsKey, rescaleKey, nodataKey],
-        },
       });
     }
 
@@ -109,18 +109,18 @@ export default function App() {
       state.bands.length > 0 &&
       colormapTexture
     ) {
-      const bandKey = String(state.bands[0]);
-      const rescaleKey = state.rescale?.[0]?.join(",") ?? "";
-      const nodataKey = String(state.nodata);
-      const colormapKey = state.colormap ?? "viridis";
+      const key = [
+        "single",
+        String(state.bands[0]),
+        state.rescale?.[0]?.join(",") ?? "",
+        String(state.nodata),
+        state.colormap ?? "viridis",
+      ].join("|");
       return new COGLayer({
         ...baseProps,
+        id: `cog:${key}`,
         getTileData: makeSingleTileLoader(state.bands[0]),
         renderTile: buildSingleRenderTile(state, colormapTexture),
-        updateTriggers: {
-          getTileData: [bandKey],
-          renderTile: [bandKey, rescaleKey, nodataKey, colormapKey],
-        },
       });
     }
 
