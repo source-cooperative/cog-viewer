@@ -12,7 +12,6 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "reac
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
 import { resolveBasemap } from "./basemaps";
-import { BasemapPicker } from "./components/BasemapPicker";
 import { ControlsPanel } from "./components/ControlsPanel";
 import { EmptyState } from "./components/EmptyState";
 import {
@@ -150,12 +149,7 @@ export default function App() {
         />
       </MaplibreMap>
 
-      <BasemapPicker
-        value={state.basemap}
-        onChange={(basemap) => update({ basemap })}
-      />
-
-      {state.url && <ControlsPanel state={state} update={update} />}
+      <ControlsPanel state={state} update={update} />
 
       {!state.url && <EmptyState onSubmit={(url) => update({ url })} />}
     </div>

@@ -13,39 +13,48 @@ export function EmptyState({ onSubmit }: Props) {
         inset: 0,
         display: "grid",
         placeItems: "center",
-        background: "rgba(0,0,0,0.4)",
+        background: "rgba(44, 50, 51, 0.32)",
         zIndex: 10,
+        padding: 16,
       }}
     >
       <div
+        className="panel"
         style={{
-          background: "white",
           padding: 24,
-          borderRadius: 8,
-          width: 420,
+          width: "min(440px, 100%)",
           display: "grid",
-          gap: 12,
+          gap: 14,
         }}
       >
-        <h2 style={{ margin: 0 }}>Open a COG</h2>
+        <div style={{ display: "grid", gap: 4 }}>
+          <span className="panel-header">COG Viewer</span>
+          <h2 style={{ margin: 0, fontWeight: 600, fontSize: 20 }}>Open a Cloud Optimized GeoTIFF</h2>
+        </div>
 
-        <label style={{ display: "grid", gap: 4 }}>
-          <span>Paste a COG URL</span>
+        <label style={{ display: "grid", gap: 6 }}>
+          <span className="field-label">Paste a COG URL</span>
           <div style={{ display: "flex", gap: 8 }}>
             <input
-              placeholder="COG URL (https://…)"
+              aria-label="cog-url"
+              placeholder="https://…/cog.tif"
               value={value}
               onChange={(e) => setValue(e.target.value)}
-              style={{ flex: 1, padding: "6px 8px" }}
+              style={{ flex: 1 }}
             />
-            <button type="button" disabled={!value} onClick={() => onSubmit(value)}>
+            <button
+              type="button"
+              className="primary"
+              disabled={!value}
+              onClick={() => onSubmit(value)}
+            >
               Load
             </button>
           </div>
         </label>
 
-        <label style={{ display: "grid", gap: 4 }}>
-          <span>Or pick an example</span>
+        <label style={{ display: "grid", gap: 6 }}>
+          <span className="field-label">Or pick an example</span>
           <select
             aria-label="example"
             defaultValue=""
@@ -65,11 +74,13 @@ export function EmptyState({ onSubmit }: Props) {
         <label
           data-testid="drop-zone"
           style={{
-            border: "2px dashed #ccc",
-            borderRadius: 6,
-            padding: 16,
+            border: "1.5px dashed var(--border-strong)",
+            borderRadius: "var(--radius)",
+            padding: 18,
             textAlign: "center",
             cursor: "pointer",
+            background: "var(--surface-muted)",
+            color: "var(--text-muted)",
           }}
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
@@ -78,12 +89,12 @@ export function EmptyState({ onSubmit }: Props) {
             if (f) onSubmit(URL.createObjectURL(f));
           }}
         >
-          <span>Or drop a .tif file</span>
+          <div style={{ marginBottom: 8 }}>Or drop a .tif file</div>
           <input
             data-testid="file-input"
             type="file"
             accept=".tif,.tiff"
-            style={{ display: "block", margin: "8px auto 0" }}
+            style={{ display: "block", margin: "0 auto" }}
             onChange={(e) => {
               const f = e.target.files?.[0];
               if (f) onSubmit(URL.createObjectURL(f));

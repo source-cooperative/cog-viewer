@@ -8,7 +8,7 @@ describe("EmptyState", () => {
     const onSubmit = vi.fn();
     render(<EmptyState onSubmit={onSubmit} />);
     await userEvent.type(
-      screen.getByPlaceholderText(/cog url/i),
+      screen.getByLabelText("cog-url"),
       "https://example.com/x.tif",
     );
     await userEvent.click(screen.getByRole("button", { name: /load/i }));
