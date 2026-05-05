@@ -109,10 +109,26 @@ export default function App() {
   const layer = useMemo(() => {
     if (!state.url) return null;
 
-    const baseProps = {
+    // Always mount the custom path (stable id "cog") so the tile cache
+    // survives every mode/band/rescale/colormap toggle. Single-band mode
+    // additionally needs the colormap sprite uploaded to the device, so we
+    // fall back to RGB rendering until that's ready.
+    const fetchedBands = Array.from(
+      { length: MAX_BAND_SLOTS },
+      (_, i) => i + 1,
+    );
+
+    const renderTile =
+      state.mode === "single" && colormapTexture
+        ? buildSingleCompositeRenderTile(state, colormapTexture)
+        : buildRgbCompositeRenderTile(state);
+
+    return new COGLayer({
       id: "cog",
       geotiff: state.url,
       opacity: state.opacity,
+      getTileData: makeMultiBandTileLoader(fetchedBands),
+      renderTile,
       onGeoTIFFLoad: (
         tiff: GeoTIFF,
         options: {
@@ -131,43 +147,7 @@ export default function App() {
           { padding: 40, duration: 800 },
         );
       },
-    };
-
-    // Always fetch a stable prefix of bands so the layer id stays the same
-    // across band-selection changes (and across the initial bandCount
-    // resolution). The loader silently skips indexes beyond the COG's
-    // actual band count, so this is safe for COGs with fewer than
-    // MAX_BAND_SLOTS bands.
-    const fetchedBands = Array.from(
-      { length: MAX_BAND_SLOTS },
-      (_, i) => i + 1,
-    );
-    const cacheKey = "cog:custom";
-
-    if (state.mode === "rgb" && state.bands && state.bands.length > 0) {
-      return new COGLayer({
-        ...baseProps,
-        id: cacheKey,
-        getTileData: makeMultiBandTileLoader(fetchedBands),
-        renderTile: buildRgbCompositeRenderTile(state),
-      });
-    }
-
-    if (
-      state.mode === "single" &&
-      state.bands &&
-      state.bands.length > 0 &&
-      colormapTexture
-    ) {
-      return new COGLayer({
-        ...baseProps,
-        id: cacheKey,
-        getTileData: makeMultiBandTileLoader(fetchedBands),
-        renderTile: buildSingleCompositeRenderTile(state, colormapTexture),
-      });
-    }
-
-    return new COGLayer(baseProps);
+    });
   }, [
     state.url,
     state.opacity,
