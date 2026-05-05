@@ -6,13 +6,14 @@ import {
   decodeColormapSprite,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import colormapsPngUrl from "@developmentseed/deck.gl-raster/gpu-modules/colormaps.png";
-import { GeoTIFF } from "@developmentseed/geotiff";
+import type { GeoTIFF } from "@developmentseed/geotiff";
 import type { Device, Texture } from "@luma.gl/core";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
 import { resolveBasemap } from "./basemaps";
+import { loadGeoTIFF } from "./cog/load-geotiff";
 import { ControlsPanel } from "./components/ControlsPanel";
 import { EmptyState } from "./components/EmptyState";
 import {
@@ -59,25 +60,11 @@ export default function App() {
   const [bandCount, setBandCount] = useState<number | null>(null);
   const [bandNames, setBandNames] = useState<Map<number, string> | null>(null);
 
-  // Construct the GeoTIFF instance ourselves with a 1 MB chunk size instead
-  // of letting COGLayer call GeoTIFF.fromUrl(url) (which uses the published
-  // 0.6.1 default of 32 KB).
-  //
-  // Why: when an S3 bucket doesn't expose `Content-Range` via CORS (no
-  // `Access-Control-Expose-Headers`), the geotiff library's SourceHttp falls
-  // back to reading `Content-Length` from the 206 response and treats *that*
-  // (= the chunk size) as the whole-file size. Then `getMaxLength(offset,
-  // length)` returns a NEGATIVE value when the IFD chain points past the
-  // assumed file end, producing a malformed `bytes=START-END` Range header
-  // (end < start). S3 ignores the bad range and serves the entire file with
-  // status 200. For NLCD that's a 1.4 GB download per page load.
-  //
-  // Bumping the prefetch chunk to 1 MB matches the fix on
-  // @developmentseed/deck.gl-raster main (ref deck.gl-raster#294,
-  // blacha/cogeotiff#1431) — large enough that most COGs' IFD chains fit in
-  // the very first range request, so no second range request is needed and
-  // the `getMaxLength` bug never trips. Remove this workaround once
-  // @developmentseed/geotiff publishes the new default (post-0.6.1).
+  // Open the GeoTIFF ourselves through the CORS workaround in cog/load-geotiff.
+  // Required (not just an optimization) because the geotiff library's
+  // SourceHttp misreads Content-Length of a 206 response as the whole-file
+  // size when the bucket doesn't expose Content-Range via CORS — leading to
+  // malformed Range headers and a full-file download. See load-geotiff.ts.
   useEffect(() => {
     setGeotiff(null);
     setAutoStats(null);
@@ -88,13 +75,10 @@ export default function App() {
     let cancelled = false;
     (async () => {
       try {
-        const tiff = await GeoTIFF.fromUrl(url, {
-          chunkSize: 1024 * 1024,
-          cacheSize: 10 * 1024 * 1024,
-        });
+        const tiff = await loadGeoTIFF(url);
         if (!cancelled) setGeotiff(tiff);
       } catch (err) {
-        if (!cancelled) console.error("GeoTIFF.fromUrl failed", err);
+        if (!cancelled) console.error("loadGeoTIFF failed", err);
       }
     })();
     return () => {

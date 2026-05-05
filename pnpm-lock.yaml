@@ -8,6 +8,15 @@ importers:
 
   .:
     dependencies:
+      '@chunkd/middleware':
+        specifier: ^11.3.0
+        version: 11.3.0
+      '@chunkd/source':
+        specifier: ^11.4.0
+        version: 11.4.0
+      '@chunkd/source-http':
+        specifier: ^11.4.0
+        version: 11.4.0
       '@cogeotiff/core':
         specifier: ^9.5.0
         version: 9.5.0
