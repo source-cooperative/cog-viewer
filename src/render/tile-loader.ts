@@ -27,6 +27,27 @@ export type MultiBandTileData = {
   nodata: number | null;
 };
 
+/**
+ * Best-effort GPU-texture cleanup. `RasterTileLayer` doesn't surface
+ * `onTileUnload`, so we can't deterministically destroy textures when
+ * deck.gl evicts a tile. The next-best thing is a `FinalizationRegistry`
+ * that fires when the tile data object is GC'd, which in practice happens
+ * shortly after eviction. Unfreed textures leak GPU memory; the registry
+ * bounds the leak instead of eliminating it.
+ */
+const tileFinalizer =
+  typeof FinalizationRegistry !== "undefined"
+    ? new FinalizationRegistry<Texture[]>((textures) => {
+        for (const t of textures) {
+          try {
+            t.destroy();
+          } catch {
+            // best-effort
+          }
+        }
+      })
+    : null;
+
 function singleBandFormat(data: RasterTypedArray): TextureFormat {
   if (data instanceof Uint8Array || data instanceof Uint8ClampedArray) {
     return "r8unorm";
@@ -38,17 +59,6 @@ function singleBandFormat(data: RasterTypedArray): TextureFormat {
     return "r32float";
   }
   return "r8unorm";
-}
-
-function bytesPerPixelSingle(format: TextureFormat): number {
-  switch (format) {
-    case "r16float":
-      return 2;
-    case "r32float":
-      return 4;
-    default:
-      return 1;
-  }
 }
 
 /** WebGPU/luma can't upload integer typed arrays into float texture formats;
@@ -121,14 +131,25 @@ export function makeMultiBandTileLoader(bandIndexes: number[]) {
         height: array.height,
       });
       bands.set(String(idx), { texture, uvTransform: IDENTITY_UV });
-      totalBytes += array.width * array.height * bytesPerPixelSingle(format);
+      // Use the *post-coercion* per-element byte size so deck.gl's tile
+      // cache budget reflects the actual buffer allocated. coerceForFormat
+      // upcasts int16/uint16 to Float32 (4 bytes), which the older
+      // bytesPerPixelSingle table reported as 2 bytes — under-counting.
+      totalBytes += array.width * array.height * data.BYTES_PER_ELEMENT;
     }
-    return {
+    const result: MultiBandTileData = {
       bands,
       width: array.width,
       height: array.height,
       byteLength: totalBytes,
       nodata: array.nodata,
     };
+    if (tileFinalizer && bands.size > 0) {
+      tileFinalizer.register(
+        result,
+        Array.from(bands.values(), (v) => v.texture),
+      );
+    }
+    return result;
   };
 }

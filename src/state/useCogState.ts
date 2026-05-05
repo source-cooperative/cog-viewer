@@ -13,20 +13,41 @@ const VALID_PANEL: PanelState[] = ["open", "closed"];
 
 const parseRescale = (raw: string | null): [number, number][] | null => {
   if (!raw) return null;
-  return raw.split(";").map((pair) => {
-    const [a, b] = pair.split(",").map(Number);
-    return [a, b] as [number, number];
-  });
+  const pairs: [number, number][] = [];
+  for (const part of raw.split(";")) {
+    const halves = part.split(",");
+    if (halves.length !== 2) return null;
+    const a = Number(halves[0]);
+    const b = Number(halves[1]);
+    if (!Number.isFinite(a) || !Number.isFinite(b)) return null;
+    pairs.push([a, b]);
+  }
+  return pairs.length > 0 ? pairs : null;
 };
 
-const parseBands = (raw: string | null): number[] | null =>
-  raw ? raw.split(",").map((n) => Number(n)) : null;
+const parseBands = (raw: string | null): number[] | null => {
+  if (!raw) return null;
+  const out: number[] = [];
+  for (const tok of raw.split(",")) {
+    const n = Number(tok);
+    if (!Number.isFinite(n) || n < 1 || !Number.isInteger(n)) return null;
+    out.push(n);
+  }
+  return out.length > 0 ? out : null;
+};
 
 const parseNodata = (raw: string | null): number | "off" | null => {
-  if (raw === null) return null;
+  if (raw === null || raw === "") return null;
   if (raw === "off") return "off";
   const n = Number(raw);
   return Number.isFinite(n) ? n : null;
+};
+
+const parseOpacity = (raw: string | null): number => {
+  if (raw === null || raw === "") return 1;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return 1;
+  return Math.min(1, Math.max(0, n));
 };
 
 export function parseCogState(p: URLSearchParams): CogState {
@@ -39,7 +60,7 @@ export function parseCogState(p: URLSearchParams): CogState {
     rescale: parseRescale(p.get("rescale")),
     colormap: p.get("colormap"),
     nodata: parseNodata(p.get("nodata")),
-    opacity: p.has("opacity") ? Number(p.get("opacity")) : 1,
+    opacity: parseOpacity(p.get("opacity")),
     colorspace: p.get("colorspace"),
     basemap: VALID_BASEMAPS.includes(basemapRaw as Basemap)
       ? (basemapRaw as Basemap)
@@ -82,7 +103,11 @@ export function useCogState() {
 
   const update = useCallback((patch: CogStateUpdate) => {
     const current = parseCogState(new URLSearchParams(window.location.search));
-    const next: CogState = { ...current, ...patch };
+    const next: CogState = { ...current };
+    for (const key in patch) {
+      const v = (patch as Record<string, unknown>)[key];
+      if (v !== undefined) (next as Record<string, unknown>)[key] = v;
+    }
     const params = serializeCogState(next);
     const qs = params.toString();
     const url = qs

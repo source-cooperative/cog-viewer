@@ -46,6 +46,44 @@ describe("parseCogState", () => {
   it("ignores invalid mode", () => {
     expect(parseCogState(new URLSearchParams("mode=bogus")).mode).toBeNull();
   });
+
+  it("rejects NaN / non-integer / non-positive bands", () => {
+    expect(parseCogState(new URLSearchParams("bands=foo,bar")).bands).toBeNull();
+    expect(parseCogState(new URLSearchParams("bands=")).bands).toBeNull();
+    expect(parseCogState(new URLSearchParams("bands=1,,3")).bands).toBeNull();
+    expect(parseCogState(new URLSearchParams("bands=0,1")).bands).toBeNull();
+    expect(parseCogState(new URLSearchParams("bands=1.5,2")).bands).toBeNull();
+    expect(parseCogState(new URLSearchParams("bands=-1,2")).bands).toBeNull();
+  });
+
+  it("rejects malformed rescale pairs", () => {
+    expect(parseCogState(new URLSearchParams("rescale=foo")).rescale).toBeNull();
+    expect(parseCogState(new URLSearchParams("rescale=0")).rescale).toBeNull();
+    expect(parseCogState(new URLSearchParams("rescale=0,1,2")).rescale).toBeNull();
+    expect(parseCogState(new URLSearchParams("rescale=")).rescale).toBeNull();
+  });
+
+  it("clamps opacity to [0, 1] and rejects NaN", () => {
+    expect(parseCogState(new URLSearchParams("opacity=abc")).opacity).toBe(1);
+    expect(parseCogState(new URLSearchParams("opacity=99")).opacity).toBe(1);
+    expect(parseCogState(new URLSearchParams("opacity=-0.5")).opacity).toBe(0);
+    expect(parseCogState(new URLSearchParams("opacity=")).opacity).toBe(1);
+  });
+
+  it("treats empty nodata as auto, preserves 0 and off", () => {
+    expect(parseCogState(new URLSearchParams("nodata=")).nodata).toBeNull();
+    expect(parseCogState(new URLSearchParams("nodata=0")).nodata).toBe(0);
+    expect(parseCogState(new URLSearchParams("nodata=off")).nodata).toBe("off");
+  });
+
+  it("falls back to defaults for invalid basemap and panel", () => {
+    expect(parseCogState(new URLSearchParams("basemap=hotpink")).basemap).toBe(
+      "auto",
+    );
+    expect(parseCogState(new URLSearchParams("panel=maybe")).panel).toBe(
+      "closed",
+    );
+  });
 });
 
 describe("serializeCogState", () => {

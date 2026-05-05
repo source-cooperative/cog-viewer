@@ -49,6 +49,13 @@ function DeckGLOverlay(
   return null;
 }
 
+// Module-scope so getTileData identity stays stable across renders. deck.gl's
+// TileLayer treats a changed getTileData reference as cache-invalidating, so
+// allocating a fresh closure per render would defeat the stable-id design and
+// refetch tiles on every state change (opacity drag, band swap, etc.).
+const FETCHED_BANDS = Array.from({ length: MAX_BAND_SLOTS }, (_, i) => i + 1);
+const getTileData = makeMultiBandTileLoader(FETCHED_BANDS);
+
 export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [state, update] = useCogState();
@@ -135,11 +142,6 @@ export default function App() {
     // survives every mode/band/rescale/colormap toggle. Single-band mode
     // additionally needs the colormap sprite uploaded to the device, so we
     // fall back to RGB rendering until that's ready.
-    const fetchedBands = Array.from(
-      { length: MAX_BAND_SLOTS },
-      (_, i) => i + 1,
-    );
-
     const renderTile =
       state.mode === "single" && colormapTexture
         ? buildSingleCompositeRenderTile(state, colormapTexture)
@@ -149,7 +151,7 @@ export default function App() {
       id: "cog",
       geotiff,
       opacity: state.opacity,
-      getTileData: makeMultiBandTileLoader(fetchedBands),
+      getTileData,
       renderTile,
       onGeoTIFFLoad: (
         tiff: GeoTIFF,
