@@ -109,6 +109,81 @@ function coerceForFormat(
   return array;
 }
 
+function singleBandFormat(data: RasterTypedArray): TextureFormat {
+  if (data instanceof Uint8Array || data instanceof Uint8ClampedArray) {
+    return "r8unorm";
+  }
+  if (data instanceof Uint16Array || data instanceof Int16Array) {
+    return "r16float";
+  }
+  if (data instanceof Float32Array) {
+    return "r32float";
+  }
+  return "r8unorm";
+}
+
+function bytesPerPixelSingle(format: TextureFormat): number {
+  switch (format) {
+    case "r16float":
+      return 2;
+    case "r32float":
+      return 4;
+    default:
+      return 1;
+  }
+}
+
+/**
+ * Build a getTileData callback for a single-band COG (or one user-selected
+ * band of a multi-band COG). Uploads as an `r*` texture; the renderTile
+ * pipeline broadcasts the red channel into RGB via `BlackIsZero` and applies
+ * a colormap on top.
+ */
+export function makeSingleTileLoader(bandIndex: number) {
+  return async function getTileData(
+    image: GeoTIFF | Overview,
+    options: GetTileDataOptions,
+  ): Promise<TileTextureData> {
+    const { device, x, y, signal } = options;
+    const tile = await image.fetchTile(x, y, { signal, boundless: false });
+    const array: RasterArray = tile.array;
+    const idx = bandIndex - 1;
+    const bandData: RasterTypedArray =
+      array.layout === "band-separate"
+        ? (array.bands[idx] ?? array.bands[0])
+        : extractBand(array.data as RasterTypedArray, idx, array.count);
+    const format = singleBandFormat(bandData);
+    const data = coerceForFormat(bandData, format);
+    const texture = device.createTexture({
+      data,
+      format,
+      width: array.width,
+      height: array.height,
+    });
+    return {
+      texture,
+      width: array.width,
+      height: array.height,
+      byteLength: array.width * array.height * bytesPerPixelSingle(format),
+      nodata: array.nodata,
+    };
+  };
+}
+
+function extractBand(
+  data: RasterTypedArray,
+  band: number,
+  count: number,
+): RasterTypedArray {
+  const pixels = data.length / count;
+  const Ctor = data.constructor as new (length: number) => RasterTypedArray;
+  const out = new Ctor(pixels);
+  for (let i = 0; i < pixels; i++) {
+    out[i] = data[i * count + band] as number;
+  }
+  return out;
+}
+
 /**
  * Build a getTileData callback for a multi-band COG that packs user-chosen
  * band indexes into an RGBA texture.

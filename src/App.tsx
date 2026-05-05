@@ -1,15 +1,28 @@
 import type { MapboxOverlayProps } from "@deck.gl/mapbox";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import { COGLayer } from "@developmentseed/deck.gl-geotiff";
+import {
+  createColormapTexture,
+  decodeColormapSprite,
+} from "@developmentseed/deck.gl-raster/gpu-modules";
+import colormapsPngUrl from "@developmentseed/deck.gl-raster/gpu-modules/colormaps.png";
+import type { Device, Texture } from "@luma.gl/core";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { useMemo, useRef, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
 import { resolveBasemap } from "./basemaps";
 import { BasemapPicker } from "./components/BasemapPicker";
+import { ControlsPanel } from "./components/ControlsPanel";
 import { EmptyState } from "./components/EmptyState";
-import { buildRgbRenderTile } from "./render/render-pipeline";
-import { makeRgbaTileLoader } from "./render/tile-loader";
+import {
+  buildRgbRenderTile,
+  buildSingleRenderTile,
+} from "./render/render-pipeline";
+import {
+  makeRgbaTileLoader,
+  makeSingleTileLoader,
+} from "./render/tile-loader";
 import { useCogState } from "./state/useCogState";
 
 const darkMql = window.matchMedia("(prefers-color-scheme: dark)");
@@ -21,7 +34,9 @@ const getColorSchemeSnapshot = () => darkMql.matches;
 const usePrefersDark = () =>
   useSyncExternalStore(subscribeColorScheme, getColorSchemeSnapshot, () => false);
 
-function DeckGLOverlay(props: MapboxOverlayProps) {
+function DeckGLOverlay(
+  props: MapboxOverlayProps & { onDeviceInitialized?: (d: Device) => void },
+) {
   const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
   overlay.setProps(props);
   return null;
@@ -31,6 +46,23 @@ export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [state, update] = useCogState();
   const prefersDark = usePrefersDark();
+  const [device, setDevice] = useState<Device | null>(null);
+  const [colormapTexture, setColormapTexture] = useState<Texture | null>(null);
+
+  useEffect(() => {
+    if (!device) return;
+    let cancelled = false;
+    (async () => {
+      const resp = await fetch(colormapsPngUrl);
+      const bytes = await resp.arrayBuffer();
+      const image = await decodeColormapSprite(bytes);
+      if (cancelled) return;
+      setColormapTexture(createColormapTexture(device, image));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [device]);
 
   const layer = useMemo(() => {
     if (!state.url) return null;
@@ -39,9 +71,12 @@ export default function App() {
       id: "cog",
       geotiff: state.url,
       opacity: state.opacity,
-      onGeoTIFFLoad: (_tiff: unknown, options: {
-        geographicBounds: { west: number; south: number; east: number; north: number };
-      }) => {
+      onGeoTIFFLoad: (
+        _tiff: unknown,
+        options: {
+          geographicBounds: { west: number; south: number; east: number; north: number };
+        },
+      ) => {
         const { west, south, east, north } = options.geographicBounds;
         mapRef.current?.fitBounds(
           [
@@ -68,6 +103,27 @@ export default function App() {
       });
     }
 
+    if (
+      state.mode === "single" &&
+      state.bands &&
+      state.bands.length > 0 &&
+      colormapTexture
+    ) {
+      const bandKey = String(state.bands[0]);
+      const rescaleKey = state.rescale?.[0]?.join(",") ?? "";
+      const nodataKey = String(state.nodata);
+      const colormapKey = state.colormap ?? "viridis";
+      return new COGLayer({
+        ...baseProps,
+        getTileData: makeSingleTileLoader(state.bands[0]),
+        renderTile: buildSingleRenderTile(state, colormapTexture),
+        updateTriggers: {
+          getTileData: [bandKey],
+          renderTile: [bandKey, rescaleKey, nodataKey, colormapKey],
+        },
+      });
+    }
+
     return new COGLayer(baseProps);
   }, [
     state.url,
@@ -76,6 +132,8 @@ export default function App() {
     state.bands,
     state.rescale,
     state.nodata,
+    state.colormap,
+    colormapTexture,
   ]);
 
   return (
@@ -85,13 +143,19 @@ export default function App() {
         initialViewState={{ longitude: 0, latitude: 0, zoom: 2 }}
         mapStyle={resolveBasemap(state.basemap, prefersDark)}
       >
-        <DeckGLOverlay layers={layer ? [layer] : []} interleaved />
+        <DeckGLOverlay
+          layers={layer ? [layer] : []}
+          interleaved
+          onDeviceInitialized={setDevice}
+        />
       </MaplibreMap>
 
       <BasemapPicker
         value={state.basemap}
         onChange={(basemap) => update({ basemap })}
       />
+
+      {state.url && <ControlsPanel state={state} update={update} />}
 
       {!state.url && <EmptyState onSubmit={(url) => update({ url })} />}
     </div>
