@@ -75,6 +75,15 @@ export default function App() {
     return () => ctrl.abort();
   }, [geotiff]);
 
+  // Single-band COGs need the custom path to render with a colormap;
+  // COGLayer's defaults render single-band as raw grayscale only. Auto-pick
+  // single + colormap when the user hasn't chosen a mode yet.
+  useEffect(() => {
+    if (bandCount !== null && bandCount < 2 && state.mode === null) {
+      update({ mode: "single", bands: [1] });
+    }
+  }, [bandCount, state.mode, update]);
+
   useEffect(() => {
     if (!device) return;
     let cancelled = false;
