@@ -5,9 +5,11 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { useMemo, useRef, useSyncExternalStore } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
+import { resolveBasemap } from "./basemaps";
 import { BasemapPicker } from "./components/BasemapPicker";
 import { EmptyState } from "./components/EmptyState";
-import { resolveBasemap } from "./basemaps";
+import { buildRgbRenderTile } from "./render/render-pipeline";
+import { makeRgbaTileLoader } from "./render/tile-loader";
 import { useCogState } from "./state/useCogState";
 
 const darkMql = window.matchMedia("(prefers-color-scheme: dark)");
@@ -32,11 +34,14 @@ export default function App() {
 
   const layer = useMemo(() => {
     if (!state.url) return null;
-    return new COGLayer({
+
+    const baseProps = {
       id: "cog",
       geotiff: state.url,
       opacity: state.opacity,
-      onGeoTIFFLoad: (_tiff, options) => {
+      onGeoTIFFLoad: (_tiff: unknown, options: {
+        geographicBounds: { west: number; south: number; east: number; north: number };
+      }) => {
         const { west, south, east, north } = options.geographicBounds;
         mapRef.current?.fitBounds(
           [
@@ -46,8 +51,32 @@ export default function App() {
           { padding: 40, duration: 800 },
         );
       },
-    });
-  }, [state.url, state.opacity]);
+    };
+
+    if (state.mode === "rgb" && state.bands && state.bands.length > 0) {
+      const bandsKey = state.bands.join(",");
+      const rescaleKey = state.rescale?.[0]?.join(",") ?? "";
+      const nodataKey = String(state.nodata);
+      return new COGLayer({
+        ...baseProps,
+        getTileData: makeRgbaTileLoader(state.bands),
+        renderTile: buildRgbRenderTile(state),
+        updateTriggers: {
+          getTileData: [bandsKey],
+          renderTile: [bandsKey, rescaleKey, nodataKey],
+        },
+      });
+    }
+
+    return new COGLayer(baseProps);
+  }, [
+    state.url,
+    state.opacity,
+    state.mode,
+    state.bands,
+    state.rescale,
+    state.nodata,
+  ]);
 
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>

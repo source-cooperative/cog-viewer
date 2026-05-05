@@ -146,3 +146,4 @@ Out of scope for v1:
 - Multi-COG mosaicking via `MultiCOGLayer`.
 - Histogram + percentile auto-stretch UI.
 - Pixel inspector / value-at-cursor readout.
+- **Antimeridian wrap.** `@developmentseed/deck.gl-raster`'s `RasterReprojector` produces a single mesh in source-CRS coordinates without world-copy duplication, so a COG centered near 180° appears only once and is clipped where the map repeats. Fixing this requires upstream changes (or replicating layer instances in client-shifted longitude bands), out of scope for v1.
