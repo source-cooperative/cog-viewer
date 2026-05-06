@@ -168,20 +168,22 @@ a {
   color: var(--text);
 }
 
-details.section > summary {
+details.section > summary,
+details.panel > summary {
   list-style: none;
   cursor: pointer;
   user-select: none;
   display: flex;
   align-items: center;
-  /* gap: 6px; */
 }
 
-details.section > summary::-webkit-details-marker {
+details.section > summary::-webkit-details-marker,
+details.panel > summary::-webkit-details-marker {
   display: none;
 }
 
-details.section > summary::after {
+details.section > summary::after,
+details.panel > summary::after {
   content: "▸";
   font-size: 24px;
   color: var(--text-muted);
@@ -189,7 +191,8 @@ details.section > summary::after {
   transition: transform 100ms ease;
 }
 
-details.section[open] > summary::after {
+details.section[open] > summary::after,
+details.panel[open] > summary::after {
   transform: rotate(90deg);
 }
 

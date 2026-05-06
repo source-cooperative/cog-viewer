@@ -511,8 +511,15 @@ export function ControlsPanel({
   );
 
   return (
-    <div
+    <details
       className="panel"
+      open={open}
+      onToggle={(e) => {
+        const next = (e.currentTarget as HTMLDetailsElement).open
+          ? "open"
+          : "closed";
+        if (next !== state.panel) setOpen(next === "open");
+      }}
       style={{
         position: "absolute",
         top: 16,
@@ -521,37 +528,17 @@ export function ControlsPanel({
         maxWidth: "calc(100vw - 32px)",
         padding: "8px 12px",
         zIndex: 5,
-        display: "grid",
-        // Section spacing is owned by .section + .section in styles.css; the
-        // panel only needs a small gap between the header button and the
-        // first section.
-        gap: 0,
+        display: "block",
         maxHeight: "calc(100vh - 32px)",
         overflowX: "hidden",
         overflowY: "auto",
         boxSizing: "border-box",
       }}
     >
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        style={{
-          all: "unset",
-          cursor: "pointer",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-        }}
-      >
-        <span className="panel-header">Options</span>
-        <span style={{ fontSize: 24, color: "var(--text-muted)" }}>
-          {open ? "▾" : "◂"}
-        </span>
-      </button>
+      <summary className="panel-header">Options</summary>
 
-      {open && (
-        <>
-          {state.url && (
+      <div className="panel-body">
+        {state.url && (
             <>
               <CollapsibleSection title="Source" defaultOpen>
                 <Field label="Mode" info={HELP.mode}>
@@ -861,8 +848,7 @@ export function ControlsPanel({
               </label>
             </Field>
           </CollapsibleSection>
-        </>
-      )}
-    </div>
+      </div>
+    </details>
   );
 }
