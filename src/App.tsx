@@ -277,7 +277,6 @@ export default function App() {
     state.nodata,
     state.colormap,
     state.gamma,
-    state.sigmoidal,
     state.labelsAbove,
     firstSymbolId,
     colormapTexture,

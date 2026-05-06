@@ -21,7 +21,6 @@ import {
   Gamma,
   LogStretch,
   PerBandLinearRescale,
-  Sigmoidal,
   SqrtStretch,
 } from "./shader-modules";
 import type { MultiBandTileData } from "./tile-loader";
@@ -110,9 +109,8 @@ function effectivePerBandRescale(
 }
 
 /** Push the optional adjustments common to RGB and single-band modes,
- * in canonical order: stretch curve → gamma → sigmoidal contrast. All
- * expect input clamped to 0..1, which the preceding rescale module
- * guarantees. */
+ * in canonical order: stretch curve → gamma. Both expect input clamped
+ * to 0..1, which the preceding rescale module guarantees. */
 function pushAdjustments(state: CogState, pipeline: RasterModule[]): void {
   if (state.stretch === "log") {
     pipeline.push({ module: LogStretch, props: { strength: 99 } });
@@ -121,12 +119,6 @@ function pushAdjustments(state: CogState, pipeline: RasterModule[]): void {
   }
   if (state.gamma !== 1) {
     pipeline.push({ module: Gamma, props: { gamma: state.gamma } });
-  }
-  if (state.sigmoidal) {
-    pipeline.push({
-      module: Sigmoidal,
-      props: { contrast: state.sigmoidal.contrast, bias: state.sigmoidal.bias },
-    });
   }
 }
 

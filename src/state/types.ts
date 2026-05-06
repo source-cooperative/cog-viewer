@@ -4,11 +4,9 @@ export type Basemap = "auto" | "light" | "dark" | "satellite" | "off";
 
 export type PanelState = "open" | "closed";
 
-export type Sigmoidal = { contrast: number; bias: number };
-
-/** Curve applied to the rescaled [0, 1] value before gamma / sigmoidal /
- * colormap. "log" expands the low-value range (useful for skewed data
- * with most variation near zero); "sqrt" is a gentler version. */
+/** Curve applied to the rescaled [0, 1] value before gamma / colormap.
+ * "log" expands the low-value range (useful for skewed data with most
+ * variation near zero); "sqrt" is a gentler version. */
 export type Stretch = "linear" | "log" | "sqrt";
 
 export type CogState = {
@@ -24,8 +22,6 @@ export type CogState = {
   panel: PanelState;
   /** Power-law gamma correction (1.0 = off). */
   gamma: number;
-  /** Sigmoidal contrast (rio-color formula). null = off. */
-  sigmoidal: Sigmoidal | null;
   /** Draw the COG below the basemap's label layers (default true). */
   labelsAbove: boolean;
   /** Curve applied to rescaled values. "linear" by default. */

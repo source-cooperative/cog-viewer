@@ -12,7 +12,6 @@
 
 type RescaleProps = { rescaleMin: [number, number, number]; rescaleMax: [number, number, number] };
 type GammaProps = { gamma: number };
-type SigmoidalProps = { contrast: number; bias: number };
 type LogStretchProps = { strength: number };
 
 /** Per-channel `LinearRescale`. Same idea as the shipped `LinearRescale`,
@@ -102,34 +101,3 @@ export const LogStretch = {
   }),
 } as const;
 
-/** Sigmoidal contrast (rio-color formula). `contrast` is the slope (typical
- * 1–20); `bias` shifts the inflection point (0..1, typical 0.5). Apply
- * post-rescale; input expected in 0..1, output normalized back to 0..1. */
-export const Sigmoidal = {
-  name: "sigmoidal",
-  fs: `uniform sigmoidalUniforms {
-  float contrast;
-  float bias;
-} sigmoidal;
-`,
-  inject: {
-    "fs:DECKGL_FILTER_COLOR": `
-  {
-    float c = sigmoidal.contrast;
-    float b = sigmoidal.bias;
-    float alpha = 1.0 / (1.0 + exp(c * b));
-    float beta = 1.0 / (1.0 + exp(c * (b - 1.0)));
-    vec3 num = 1.0 / (1.0 + exp(c * (b - clamp(color.rgb, 0.0, 1.0))));
-    color.rgb = clamp((num - alpha) / max(beta - alpha, 1e-9), 0.0, 1.0);
-  }
-`,
-  },
-  uniformTypes: {
-    contrast: "f32",
-    bias: "f32",
-  },
-  getUniforms: (props: Partial<SigmoidalProps>) => ({
-    contrast: props.contrast ?? 1.0,
-    bias: props.bias ?? 0.5,
-  }),
-} as const;

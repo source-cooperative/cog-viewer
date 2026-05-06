@@ -93,14 +93,6 @@ describe("parseCogState", () => {
     expect(parseCogState(new URLSearchParams("gamma=abc")).gamma).toBe(1);
   });
 
-  it("parses sigmoidal as 'contrast,bias'; rejects malformed", () => {
-    expect(parseCogState(new URLSearchParams("sigmoidal=10,0.5")).sigmoidal)
-      .toEqual({ contrast: 10, bias: 0.5 });
-    expect(parseCogState(new URLSearchParams("sigmoidal=10")).sigmoidal).toBeNull();
-    expect(parseCogState(new URLSearchParams("sigmoidal=foo,bar")).sigmoidal).toBeNull();
-    expect(parseCogState(new URLSearchParams()).sigmoidal).toBeNull();
-  });
-
   it("parses labelsAbove; defaults true; only 'below' flips it", () => {
     expect(parseCogState(new URLSearchParams()).labelsAbove).toBe(true);
     expect(parseCogState(new URLSearchParams("labels=below")).labelsAbove).toBe(
@@ -138,7 +130,6 @@ describe("serializeCogState", () => {
       basemap: "auto",
       panel: "closed",
       gamma: 1,
-      sigmoidal: null,
       labelsAbove: true,
       stretch: "linear",
     });
@@ -158,7 +149,6 @@ describe("serializeCogState", () => {
       basemap: "auto",
       panel: "closed",
       gamma: 1,
-      sigmoidal: null,
       labelsAbove: true,
       stretch: "linear",
     });
@@ -178,7 +168,6 @@ describe("serializeCogState", () => {
       basemap: "auto" as const,
       panel: "closed" as const,
       gamma: 1,
-      sigmoidal: null,
       stretch: "linear" as const,
     };
     expect(

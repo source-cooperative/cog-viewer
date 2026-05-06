@@ -5,7 +5,6 @@ import type {
   CogStateUpdate,
   Mode,
   PanelState,
-  Sigmoidal,
   Stretch,
 } from "./types";
 
@@ -60,16 +59,6 @@ const parseGamma = (raw: string | null): number => {
   return n;
 };
 
-const parseSigmoidal = (raw: string | null): Sigmoidal | null => {
-  if (!raw) return null;
-  const parts = raw.split(",");
-  if (parts.length !== 2) return null;
-  const contrast = Number(parts[0]);
-  const bias = Number(parts[1]);
-  if (!Number.isFinite(contrast) || !Number.isFinite(bias)) return null;
-  return { contrast, bias };
-};
-
 export function parseCogState(p: URLSearchParams): CogState {
   const modeRaw = p.get("mode");
   const basemapRaw = p.get("basemap");
@@ -89,7 +78,6 @@ export function parseCogState(p: URLSearchParams): CogState {
       ? (p.get("panel") as PanelState)
       : "closed",
     gamma: parseGamma(p.get("gamma")),
-    sigmoidal: parseSigmoidal(p.get("sigmoidal")),
     labelsAbove: p.get("labels") !== "below",
     stretch: VALID_STRETCH.includes(p.get("stretch") as Stretch)
       ? (p.get("stretch") as Stretch)
@@ -110,7 +98,6 @@ export function serializeCogState(s: CogState): URLSearchParams {
   if (s.basemap !== "auto") p.set("basemap", s.basemap);
   if (s.panel !== "closed") p.set("panel", s.panel);
   if (s.gamma !== 1) p.set("gamma", String(s.gamma));
-  if (s.sigmoidal) p.set("sigmoidal", `${s.sigmoidal.contrast},${s.sigmoidal.bias}`);
   if (!s.labelsAbove) p.set("labels", "below");
   if (s.stretch !== "linear") p.set("stretch", s.stretch);
   return p;

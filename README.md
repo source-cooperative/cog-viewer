@@ -38,7 +38,6 @@ The full app state lives in the URL, so any view is shareable.
 | `colormap` | `viridis`              | Single-band only. 96 named colormaps from deck.gl-raster.            |
 | `nodata`   | `-9999` \| `off`       | Override of the COG's declared nodata.                               |
 | `gamma`    | `1.2`                  | Power-law gamma, `> 0`. `1` = off.                                   |
-| `sigmoidal`| `5,0.5`                | Sigmoidal contrast `contrast,bias` (rio-color). Omit to disable.     |
 | `opacity`  | `0.7`                  | Layer opacity, `0..1`.                                               |
 | `basemap`  | `auto` \| `light` \| `dark` \| `satellite` \| `off` | Default `auto` (follows `prefers-color-scheme`). |
 | `panel`    | `open` \| `closed`     | Whether the Options panel starts expanded.                           |
@@ -56,13 +55,13 @@ swapping bands / colormap / mode never refetches tiles).
    swizzles those band textures into RGBA at draw time, mapping the user's
    selected indexes to output channels. Re-mapping requires only a new
    draw — no fetch.
-3. **Rescale, gamma, sigmoidal, colormap, nodata.** Optional modules layer
-   on top: `PerBandLinearRescale` (RGB) or `LinearRescale` (single) for
-   value normalization, `Gamma` for power-law correction, `Sigmoidal` for
-   rio-color contrast, `Colormap` (single-band only) for color lookup
-   against a 2D-array sprite of 96 named colormaps, `FilterNoDataVal` to
-   discard nodata. The shader-module sources for the custom modules are in
-   `src/render/shader-modules.ts`.
+3. **Rescale, curve, gamma, colormap, nodata.** Optional modules layer on
+   top: `PerBandLinearRescale` (RGB) or `LinearRescale` (single) for
+   value normalization, `LogStretch` / `SqrtStretch` for non-linear
+   distribution curves, `Gamma` for power-law correction, `Colormap`
+   (single-band only) for color lookup against a 2D-array sprite of 96
+   named colormaps, `FilterNoDataVal` to discard nodata. The shader-module
+   sources for the custom modules are in `src/render/shader-modules.ts`.
 
 The first render after a URL load fetches once. Every subsequent control
 change — mode toggle, band swap, rescale, colormap pick, nodata, opacity,
@@ -146,7 +145,7 @@ Source layout:
 | `src/state/useCogState.ts`           | URL search-params hook (parse / serialize / subscribe).    |
 | `src/render/tile-loader.ts`          | `makeMultiBandTileLoader`: per-band r-channel textures.    |
 | `src/render/render-pipeline.ts`      | RGB and single-band `renderTile` builders.                 |
-| `src/render/shader-modules.ts`       | Custom luma.gl modules: per-band rescale, gamma, sigmoidal. |
+| `src/render/shader-modules.ts`       | Custom luma.gl modules: per-band rescale, log/sqrt stretch, gamma. |
 | `src/render/stats.ts`                | `readBandCount`, `readBandNames`, `computeAutoStats`.      |
 | `src/cog/load-geotiff.ts`            | CORS-safe `loadGeoTIFF()` with in-flight dedupe.           |
 | `src/components/ControlsPanel.tsx`   | Options panel (basemap + render controls).                 |

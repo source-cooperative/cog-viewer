@@ -305,10 +305,6 @@ function RescaleSection({
           onPercentile={() => update({ rescale: null })}
           onMinMax={() => minMax && setValue(minMax)}
         />
-        <StretchRow
-          value={state.stretch}
-          onChange={(stretch) => update({ stretch })}
-        />
       </Field>
     );
   }
@@ -376,10 +372,6 @@ function RescaleSection({
           })
         }
       />
-      <StretchRow
-        value={state.stretch}
-        onChange={(stretch) => update({ stretch })}
-      />
     </Field>
   );
 }
@@ -401,24 +393,10 @@ function StretchRow({
       style={{
         display: "flex",
         gap: 6,
-        marginTop: 4,
         flexWrap: "wrap",
         alignItems: "center",
       }}
     >
-      <span
-        style={{
-          fontSize: 11,
-          color: "var(--text-muted)",
-          display: "inline-flex",
-          alignItems: "center",
-          gap: 4,
-          marginRight: 2,
-        }}
-      >
-        Curve
-        <InfoIcon text={HELP.curve} />
-      </span>
       {options.map((o) => (
         <Tooltip key={o.value} text={o.help}>
           <PresetButton
@@ -655,150 +633,74 @@ export function ControlsPanel({
 
               <CollapsibleSection title="Advanced">
                 <Field label="Nodata" info={HELP.nodata}>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns:
-                      typeof state.nodata === "number"
-                        ? "minmax(0, 1fr) minmax(0, 1fr)"
-                        : "minmax(0, 1fr)",
-                    gap: 6,
-                  }}
-                >
-                  <select
-                    aria-label="nodata-mode"
-                    value={
-                      state.nodata === "off"
-                        ? "off"
-                        : state.nodata === null
-                          ? "auto"
-                          : "value"
-                    }
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      if (v === "auto") update({ nodata: null });
-                      else if (v === "off") update({ nodata: "off" });
-                      else update({ nodata: 0 });
-                    }}
-                  >
-                    <option value="auto">Auto (from COG)</option>
-                    <option value="value">Value</option>
-                    <option value="off">Off</option>
-                  </select>
-                  {typeof state.nodata === "number" && (
-                    <input
-                      aria-label="nodata-value"
-                      type="number"
-                      step="any"
-                      value={state.nodata}
-                      onChange={(e) =>
-                        update({ nodata: Number(e.target.value) })
-                      }
-                    />
-                  )}
-                </div>
-              </Field>
-
-              <Field
-                label={`Gamma (${state.gamma.toFixed(2)})`}
-                info="Power-law correction applied AFTER the curve. Gamma > 1 lifts shadows; gamma < 1 deepens them. 1.0 disables it."
-              >
-                <input
-                  aria-label="gamma"
-                  type="range"
-                  min={0.1}
-                  max={3}
-                  step={0.05}
-                  value={state.gamma}
-                  onChange={(e) =>
-                    update({ gamma: Number(e.target.value) })
-                  }
-                  onDoubleClick={() => update({ gamma: 1 })}
-                />
-              </Field>
-
-              <Field
-                label="Sigmoidal contrast"
-                info="S-curve contrast (rio-color formula) applied after gamma. Pushes mid-tones toward 0 or 1 based on bias. Useful for boosting visual punch without clipping."
-              >
-                <div style={{ display: "grid", gap: 6 }}>
-                  <label
+                  <div
                     style={{
-                      display: "flex",
+                      display: "grid",
+                      gridTemplateColumns:
+                        typeof state.nodata === "number"
+                          ? "minmax(0, 1fr) minmax(0, 1fr)"
+                          : "minmax(0, 1fr)",
                       gap: 6,
-                      alignItems: "center",
-                      fontSize: 12,
                     }}
                   >
-                    <input
-                      aria-label="sigmoidal-enabled"
-                      type="checkbox"
-                      checked={state.sigmoidal !== null}
-                      onChange={(e) =>
-                        update({
-                          sigmoidal: e.target.checked
-                            ? { contrast: 5, bias: 0.5 }
-                            : null,
-                        })
+                    <select
+                      aria-label="nodata-mode"
+                      value={
+                        state.nodata === "off"
+                          ? "off"
+                          : state.nodata === null
+                            ? "auto"
+                            : "value"
                       }
-                    />
-                    Enabled
-                  </label>
-                  {state.sigmoidal && (
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
-                        gap: 6,
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v === "auto") update({ nodata: null });
+                        else if (v === "off") update({ nodata: "off" });
+                        else update({ nodata: 0 });
                       }}
                     >
-                      <label style={{ display: "grid", gap: 2, fontSize: 11 }}>
-                        <span style={{ color: "var(--text-muted)" }}>
-                          Contrast ({state.sigmoidal.contrast.toFixed(1)})
-                        </span>
-                        <input
-                          aria-label="sigmoidal-contrast"
-                          type="range"
-                          min={0.5}
-                          max={20}
-                          step={0.5}
-                          value={state.sigmoidal.contrast}
-                          onChange={(e) =>
-                            update({
-                              sigmoidal: state.sigmoidal && {
-                                ...state.sigmoidal,
-                                contrast: Number(e.target.value),
-                              },
-                            })
-                          }
-                        />
-                      </label>
-                      <label style={{ display: "grid", gap: 2, fontSize: 11 }}>
-                        <span style={{ color: "var(--text-muted)" }}>
-                          Bias ({state.sigmoidal.bias.toFixed(2)})
-                        </span>
-                        <input
-                          aria-label="sigmoidal-bias"
-                          type="range"
-                          min={0}
-                          max={1}
-                          step={0.05}
-                          value={state.sigmoidal.bias}
-                          onChange={(e) =>
-                            update({
-                              sigmoidal: state.sigmoidal && {
-                                ...state.sigmoidal,
-                                bias: Number(e.target.value),
-                              },
-                            })
-                          }
-                        />
-                      </label>
-                    </div>
-                  )}
-                </div>
-              </Field>
+                      <option value="auto">Auto (from COG)</option>
+                      <option value="value">Value</option>
+                      <option value="off">Off</option>
+                    </select>
+                    {typeof state.nodata === "number" && (
+                      <input
+                        aria-label="nodata-value"
+                        type="number"
+                        step="any"
+                        value={state.nodata}
+                        onChange={(e) =>
+                          update({ nodata: Number(e.target.value) })
+                        }
+                      />
+                    )}
+                  </div>
+                </Field>
 
+                <Field label="Curve" info={HELP.curve}>
+                  <StretchRow
+                    value={state.stretch}
+                    onChange={(stretch) => update({ stretch })}
+                  />
+                </Field>
+
+                <Field
+                  label={`Gamma (${state.gamma.toFixed(2)})`}
+                  info="Power-law correction applied AFTER the curve. Gamma > 1 lifts shadows; gamma < 1 deepens them. 1.0 disables it."
+                >
+                  <input
+                    aria-label="gamma"
+                    type="range"
+                    min={0.1}
+                    max={3}
+                    step={0.05}
+                    value={state.gamma}
+                    onChange={(e) =>
+                      update({ gamma: Number(e.target.value) })
+                    }
+                    onDoubleClick={() => update({ gamma: 1 })}
+                  />
+                </Field>
               </CollapsibleSection>
             </>
           )}
