@@ -94,9 +94,7 @@ function CollapsibleSection({
 }) {
   return (
     <details className="section" open={defaultOpen}>
-      <summary>
-        <span className="section-title">{title}</span>
-      </summary>
+      <summary className="section-title">{title}</summary>
       <div className="section-body">{children}</div>
     </details>
   );
