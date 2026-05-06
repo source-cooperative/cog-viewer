@@ -539,7 +539,10 @@ export function ControlsPanel({
         padding: "8px 12px",
         zIndex: 5,
         display: "grid",
-        gap: 14,
+        // Section spacing is owned by .section + .section in styles.css; the
+        // panel only needs a small gap between the header button and the
+        // first section.
+        gap: 0,
         maxHeight: "calc(100vh - 32px)",
         overflowX: "hidden",
         overflowY: "auto",

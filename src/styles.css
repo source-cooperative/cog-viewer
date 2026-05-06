@@ -149,9 +149,22 @@ a {
   gap: 10px;
 }
 
+/* First section sits right under the panel header. */
+.section:first-of-type {
+  margin-top: 12px;
+}
+
+/* Spacing between adjacent sections; tighter when both are closed. */
 .section + .section {
-  padding-top: 12px;
+  padding-top: 10px;
+  margin-top: 10px;
   border-top: 1px solid var(--border);
+}
+
+/* Two adjacent collapsed details — tuck them tighter. */
+details.section:not([open]) + details.section:not([open]) {
+  padding-top: 6px;
+  margin-top: 6px;
 }
 
 .section-title {
@@ -177,7 +190,7 @@ details.section > summary::-webkit-details-marker {
 
 details.section > summary::after {
   content: "▸";
-  font-size: 10px;
+  font-size: 24px;
   color: var(--text-muted);
   margin-left: auto;
   transition: transform 100ms ease;
