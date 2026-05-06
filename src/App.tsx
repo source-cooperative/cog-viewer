@@ -134,7 +134,9 @@ export default function App() {
     const ctrl = new AbortController();
     (async () => {
       try {
-        const stats = await computeAutoStats(geotiff, ctrl.signal);
+        const stats = await computeAutoStats(geotiff, ctrl.signal, (partial) => {
+          if (!ctrl.signal.aborted) setAutoStats(partial);
+        });
         if (!ctrl.signal.aborted) setAutoStats(stats);
       } catch (err) {
         if (!ctrl.signal.aborted) console.warn("auto-stats failed", err);
