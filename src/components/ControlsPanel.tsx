@@ -1,4 +1,5 @@
 import { COLORMAP_INDEX } from "@developmentseed/deck.gl-raster/gpu-modules";
+import { InfoIcon, Tooltip } from "./Tooltip";
 import {
   percentileFromHistogram,
   type AutoStats,
@@ -69,18 +70,58 @@ function defaultPercentileRange(stats: BandStats): [number, number] {
 
 function Field({
   label,
+  info,
   children,
 }: {
   label: string;
+  info?: string;
   children: React.ReactNode;
 }) {
   return (
     <label style={{ display: "grid", gap: 4 }}>
-      <span className="field-label">{label}</span>
+      <span
+        className="field-label"
+        style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+      >
+        {label}
+        {info && <InfoIcon text={info} />}
+      </span>
       {children}
     </label>
   );
 }
+
+const HELP = {
+  basemap:
+    "Background map style under the COG. 'Auto' follows your system color scheme; 'None' shows the COG over a flat dark surface.",
+  labels:
+    "When checked, basemap labels (place names, roads) draw on top of the COG; when off, they sit beneath it.",
+  mode:
+    "RGB / composite picks one band per output channel for true- or false-color images. Single band sends one band's value through a colormap.",
+  bandsRgb:
+    "Pick which COG band feeds each output channel. Native order is usually 1=red, 2=green, 3=blue; reorder to make false-color (e.g. NIR=4 → R) composites.",
+  bandSingle:
+    "Which band's pixel values feed the colormap.",
+  rescale:
+    "Maps a window of source values to the colormap input. Drag the histogram handles, type values, or pick a preset. The histogram below shows the distribution of pixel values for this band.",
+  colormap:
+    "Color lookup applied to the rescaled value (after the curve, before nodata).",
+  nodata:
+    "Auto reads the nodata value from the COG's GDAL_NODATA tag; Value lets you specify one in source units; Off renders every pixel.",
+  opacity: "Layer transparency, 0 (invisible) to 1 (fully opaque).",
+  preset2to98:
+    "2nd–98th percentile of pixel values. Ignores extreme outliers — the QGIS / rio-tiler default for most data.",
+  presetMinMax:
+    "Map the full pixel-value extent of the band. Best when there are no outliers, or when you want to see the absolute range.",
+  curve:
+    "How values inside the rescale window are distributed across the colormap. Linear is uniform; Log and Sqrt expand the lower part of the window — useful when most variation lives near the bottom.",
+  curveLinear:
+    "Equal source-value ranges map to equal colormap ranges. Best for evenly distributed data.",
+  curveSqrt:
+    "Square-root mapping. Gently expands lower values — try this on moderately skewed data when Linear feels too dark.",
+  curveLog:
+    "Logarithmic mapping (log(1 + 99·x)). Aggressively expands lower values — best for heavily skewed data with a long tail of large values.",
+} as const;
 
 /** Format a number for display in a numeric input. Trims trailing zeros and
  * stays compact for typical COG ranges (uint8 → integers, reflectance →
@@ -233,7 +274,7 @@ function RescaleSection({
     const setValue = (next: [number, number]) => update({ rescale: [next] });
 
     return (
-      <Field label="Rescale">
+      <Field label="Rescale" info={HELP.rescale}>
         <RescaleRow
           stats={stats}
           value={value}
@@ -333,10 +374,10 @@ function StretchRow({
   value: Stretch;
   onChange: (next: Stretch) => void;
 }) {
-  const options: { value: Stretch; label: string }[] = [
-    { value: "linear", label: "Linear" },
-    { value: "sqrt", label: "Sqrt" },
-    { value: "log", label: "Log" },
+  const options: { value: Stretch; label: string; help: string }[] = [
+    { value: "linear", label: "Linear", help: HELP.curveLinear },
+    { value: "sqrt", label: "Sqrt", help: HELP.curveSqrt },
+    { value: "log", label: "Log", help: HELP.curveLog },
   ];
   return (
     <div
@@ -352,18 +393,23 @@ function StretchRow({
         style={{
           fontSize: 11,
           color: "var(--text-muted)",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 4,
           marginRight: 2,
         }}
       >
         Curve
+        <InfoIcon text={HELP.curve} />
       </span>
       {options.map((o) => (
-        <PresetButton
-          key={o.value}
-          label={o.label}
-          active={value === o.value}
-          onClick={() => onChange(o.value)}
-        />
+        <Tooltip key={o.value} text={o.help}>
+          <PresetButton
+            label={o.label}
+            active={value === o.value}
+            onClick={() => onChange(o.value)}
+          />
+        </Tooltip>
       ))}
     </div>
   );
@@ -383,16 +429,20 @@ function PresetRow({
   if (!show) return null;
   return (
     <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
-      <PresetButton
-        label="2–98%"
-        active={active === "percentile"}
-        onClick={onPercentile}
-      />
-      <PresetButton
-        label="Min/Max"
-        active={active === "minmax"}
-        onClick={onMinMax}
-      />
+      <Tooltip text={HELP.preset2to98}>
+        <PresetButton
+          label="2–98%"
+          active={active === "percentile"}
+          onClick={onPercentile}
+        />
+      </Tooltip>
+      <Tooltip text={HELP.presetMinMax}>
+        <PresetButton
+          label="Min/Max"
+          active={active === "minmax"}
+          onClick={onMinMax}
+        />
+      </Tooltip>
     </div>
   );
 }
@@ -481,7 +531,7 @@ export function ControlsPanel({
 
       {open && (
         <>
-          <Field label="Basemap">
+          <Field label="Basemap" info={HELP.basemap}>
             <select
               aria-label="basemap"
               value={state.basemap}
@@ -512,7 +562,16 @@ export function ControlsPanel({
                   update({ labelsAbove: e.target.checked })
                 }
               />
-              Labels above data
+              <span
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+              >
+                Labels above data
+                <InfoIcon text={HELP.labels} />
+              </span>
             </label>
           </Field>
 
@@ -520,7 +579,7 @@ export function ControlsPanel({
             <>
               <hr className="divider" />
 
-              <Field label="Mode">
+              <Field label="Mode" info={HELP.mode}>
                 <select
                   aria-label="mode"
                   value={effectiveMode}
@@ -540,7 +599,7 @@ export function ControlsPanel({
               </Field>
 
               {effectiveMode === "rgb" && (
-                <Field label="Bands (R, G, B)">
+                <Field label="Bands (R, G, B)" info={HELP.bandsRgb}>
                   <div
                     style={{
                       display: "grid",
@@ -571,7 +630,7 @@ export function ControlsPanel({
               )}
 
               {effectiveMode === "single" && (
-                <Field label="Band">
+                <Field label="Band" info={HELP.bandSingle}>
                   <select
                     aria-label="band"
                     value={effectiveBands[0] ?? 1}
@@ -597,7 +656,7 @@ export function ControlsPanel({
               />
 
               {effectiveMode === "single" && (
-                <Field label="Colormap">
+                <Field label="Colormap" info={HELP.colormap}>
                   <select
                     aria-label="colormap"
                     value={state.colormap ?? "viridis"}
@@ -612,7 +671,7 @@ export function ControlsPanel({
                 </Field>
               )}
 
-              <Field label="Nodata">
+              <Field label="Nodata" info={HELP.nodata}>
                 <div
                   style={{
                     display: "grid",
@@ -657,7 +716,10 @@ export function ControlsPanel({
                 </div>
               </Field>
 
-              <Field label={`Gamma (${state.gamma.toFixed(2)})`}>
+              <Field
+                label={`Gamma (${state.gamma.toFixed(2)})`}
+                info="Power-law correction applied AFTER the curve. Gamma > 1 lifts shadows; gamma < 1 deepens them. 1.0 disables it."
+              >
                 <input
                   aria-label="gamma"
                   type="range"
@@ -672,7 +734,10 @@ export function ControlsPanel({
                 />
               </Field>
 
-              <Field label="Sigmoidal contrast">
+              <Field
+                label="Sigmoidal contrast"
+                info="S-curve contrast (rio-color formula) applied after gamma. Pushes mid-tones toward 0 or 1 based on bias. Useful for boosting visual punch without clipping."
+              >
                 <div style={{ display: "grid", gap: 6 }}>
                   <label
                     style={{
@@ -751,7 +816,10 @@ export function ControlsPanel({
                 </div>
               </Field>
 
-              <Field label={`Opacity (${state.opacity.toFixed(2)})`}>
+              <Field
+                label={`Opacity (${state.opacity.toFixed(2)})`}
+                info={HELP.opacity}
+              >
                 <input
                   aria-label="opacity"
                   type="range"
