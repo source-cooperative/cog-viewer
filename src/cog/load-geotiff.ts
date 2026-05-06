@@ -55,8 +55,12 @@ class CorsSafeSourceHttp extends SourceHttp {
   }
 }
 
-const CHUNK_SIZE = 1024 * 1024;
-const CACHE_SIZE = 10 * 1024 * 1024;
+// Match @developmentseed/geotiff's `GeoTIFF.fromUrl` defaults so we don't
+// over-fetch on first byte. The CorsSafeSourceHttp patch above handles the
+// upstream `metadata.size` bug, so a small initial chunk is safe — the
+// previous 1MB workaround was belt-and-suspenders before that patch existed.
+const CHUNK_SIZE = 32 * 1024;
+const CACHE_SIZE = 1024 * 1024;
 
 const inflight = new Map<string, Promise<GeoTIFF>>();
 
