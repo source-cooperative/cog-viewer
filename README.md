@@ -34,9 +34,11 @@ The full app state lives in the URL, so any view is shareable.
 | `url`      | `https://…/cog.tif`    | The COG to render. Required (or use the empty state).                |
 | `mode`     | `rgb` \| `single`      | Auto-picked from band count when absent.                             |
 | `bands`    | `4,3,2`                | RGB mode: R/G/B band indexes. Single mode: one index.                |
-| `rescale`  | `0,3000`               | One global `min,max` range applied before the colormap.              |
+| `rescale`  | `0,3000` or `0,3000;0,3000;0,3000` | Single-band: one `min,max`. RGB: one (broadcast) or three pairs (per-channel). |
 | `colormap` | `viridis`              | Single-band only. 96 named colormaps from deck.gl-raster.            |
 | `nodata`   | `-9999` \| `off`       | Override of the COG's declared nodata.                               |
+| `gamma`    | `1.2`                  | Power-law gamma, `> 0`. `1` = off.                                   |
+| `sigmoidal`| `5,0.5`                | Sigmoidal contrast `contrast,bias` (rio-color). Omit to disable.     |
 | `opacity`  | `0.7`                  | Layer opacity, `0..1`.                                               |
 | `basemap`  | `auto` \| `light` \| `dark` \| `satellite` \| `off` | Default `auto` (follows `prefers-color-scheme`). |
 | `panel`    | `open` \| `closed`     | Whether the Options panel starts expanded.                           |
@@ -54,10 +56,13 @@ swapping bands / colormap / mode never refetches tiles).
    swizzles those band textures into RGBA at draw time, mapping the user's
    selected indexes to output channels. Re-mapping requires only a new
    draw — no fetch.
-3. **Rescale, colormap, nodata.** Optional modules layer on top:
-   `LinearRescale` for value normalization, `Colormap` (single-band only)
-   for color lookup against a 2D-array sprite of 96 named colormaps,
-   `FilterNoDataVal` to discard nodata.
+3. **Rescale, gamma, sigmoidal, colormap, nodata.** Optional modules layer
+   on top: `PerBandLinearRescale` (RGB) or `LinearRescale` (single) for
+   value normalization, `Gamma` for power-law correction, `Sigmoidal` for
+   rio-color contrast, `Colormap` (single-band only) for color lookup
+   against a 2D-array sprite of 96 named colormaps, `FilterNoDataVal` to
+   discard nodata. The shader-module sources for the custom modules are in
+   `src/render/shader-modules.ts`.
 
 The first render after a URL load fetches once. Every subsequent control
 change — mode toggle, band swap, rescale, colormap pick, nodata, opacity,
@@ -116,9 +121,9 @@ to "GitHub Actions". The workflow handles the rest.
 │  └────────┬─────────┘                                       │
 │           ▼                                                 │
 │  ┌──────────────────┐                                       │
-│  │ GeoTIFF.fromUrl  │  (we construct it ourselves with a    │
-│  │ chunkSize 1 MB   │   1 MB prefetch chunk; see workaround │
-│  │                  │   in src/App.tsx)                     │
+│  │ loadGeoTIFF()    │  (CorsSafeSourceHttp + chunked view;  │
+│  │ src/cog/         │   works around the upstream           │
+│  │   load-geotiff   │   206-Content-Length bug)             │
 │  └────────┬─────────┘                                       │
 │           ▼                                                 │
 │  ┌──────────────────────────────────────────────────────┐   │
@@ -141,7 +146,9 @@ Source layout:
 | `src/state/useCogState.ts`           | URL search-params hook (parse / serialize / subscribe).    |
 | `src/render/tile-loader.ts`          | `makeMultiBandTileLoader`: per-band r-channel textures.    |
 | `src/render/render-pipeline.ts`      | RGB and single-band `renderTile` builders.                 |
+| `src/render/shader-modules.ts`       | Custom luma.gl modules: per-band rescale, gamma, sigmoidal. |
 | `src/render/stats.ts`                | `readBandCount`, `readBandNames`, `computeAutoStats`.      |
+| `src/cog/load-geotiff.ts`            | CORS-safe `loadGeoTIFF()` with in-flight dedupe.           |
 | `src/components/ControlsPanel.tsx`   | Options panel (basemap + render controls).                 |
 | `src/components/EmptyState.tsx`      | Paste / drop / examples landing card.                      |
 | `src/basemaps.ts`                    | `resolveBasemap()` — maps `Basemap` to a MapLibre style.   |
@@ -156,17 +163,22 @@ Source layout:
   CRS without world-copy duplication, so a COG centered near 180° appears
   only once and is clipped where the basemap repeats. Fixing this needs
   upstream work in `@developmentseed/deck.gl-raster`.
-- **`LinearRescale` is global.** Per-band rescale isn't supported by the
-  shipped GPU module; we pass one min/max applied uniformly across RGB.
-- **No gamma / sigmoidal / hillshade / band-math expressions.** Each
-  needs a custom luma.gl shader module; deferred.
-- **GeoTIFF range bug.** A bug in `@developmentseed/geotiff` 0.6.1's
-  `SourceHttp.fetch` produces malformed `Range: bytes=START-END` headers
-  (with `END < START`) when the IFD chain points past the prefetch
-  window, which causes S3 to return the entire file. We work around it
-  by constructing the `GeoTIFF` ourselves with a 1 MB prefetch chunk;
-  see the comment in `src/App.tsx`. Remove once the upstream fix lands
-  (post-0.6.1).
+- **No hillshade / band-math expressions.** Each needs a custom luma.gl
+  shader module; deferred. Hillshade requires neighbor sampling on a
+  single-band DEM; band-math needs either a fixed preset list (NDVI,
+  NDWI, …) or a small expression DSL.
+
+## Worked-around upstream bugs
+
+- **`@developmentseed/geotiff` 0.6.1 misreads `Content-Length` of 206
+  responses as the file size** when the bucket doesn't expose
+  `Content-Range` via CORS, leading to malformed `Range: bytes=START-END`
+  headers (`END < START`) on subsequent IFD reads. S3 then ignores the
+  range and serves the entire file with status 200 (1.4 GB for the NLCD
+  example COG). We work around this by constructing the source ourselves
+  via a `CorsSafeSourceHttp` subclass that wipes the bogus
+  `metadata.size` after the first 206 — see `src/cog/load-geotiff.ts`.
+  Remove once the fix lands upstream.
 
 ## Design + plan documents
 
