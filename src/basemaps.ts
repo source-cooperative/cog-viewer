@@ -49,3 +49,19 @@ export function resolveBasemap(
       return prefersDark ? CARTO_DARK : CARTO_LIGHT;
   }
 }
+
+/** Whether the panel UI should render its dark theme for the given
+ * basemap choice. "Dark" / "satellite" / "off" → always dark; "auto"
+ * follows the user's system preference; "light" stays light. */
+export function isDarkChrome(choice: Basemap, prefersDark: boolean): boolean {
+  switch (choice) {
+    case "dark":
+    case "satellite":
+    case "off":
+      return true;
+    case "light":
+      return false;
+    case "auto":
+      return prefersDark;
+  }
+}

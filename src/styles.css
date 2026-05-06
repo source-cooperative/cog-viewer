@@ -18,6 +18,23 @@
 
   --radius-sm: 4px;
   --radius: 6px;
+}
+
+/* Dark theme. Applied to descendants of .theme-dark; the basemap
+ * resolver uses the same prefers-color-scheme signal to pick the dark
+ * basemap, so panel and map stay in sync. */
+.theme-dark {
+  --bg: #1a1d1e;
+  --surface: #25292a;
+  --surface-muted: #2c3233;
+  --border: rgba(239, 235, 234, 0.14);
+  --border-strong: rgba(239, 235, 234, 0.32);
+  --text: #e8e6e4;
+  --text-muted: rgba(239, 235, 234, 0.62);
+  --accent: #e8e6e4;
+  --accent-on: #1a1d1e;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
 
   font-family: var(--font-sans);
   color: var(--text);
@@ -115,6 +132,25 @@ a {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   font-size: 13px;
+  color: var(--text);
+}
+
+.map-icon-button {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+}
+.map-icon-button:hover {
+  background: var(--surface-muted);
 }
 
 .panel-header {

@@ -12,10 +12,11 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
-import { resolveBasemap } from "./basemaps";
+import { isDarkChrome, resolveBasemap } from "./basemaps";
 import { loadGeoTIFF } from "./cog/load-geotiff";
 import { ControlsPanel } from "./components/ControlsPanel";
 import { EmptyState } from "./components/EmptyState";
+import { FullscreenButton } from "./components/FullscreenButton";
 import { Inspector, type InspectorState } from "./components/Inspector";
 import { Toast, humanizeError } from "./components/Toast";
 import {
@@ -283,6 +284,13 @@ export default function App() {
     bandNames,
   ]);
 
+  // Apply the dark theme to <html> so portal-rendered children
+  // (Tooltip, etc.) get the same CSS variables as the panel.
+  const darkChrome = isDarkChrome(state.basemap, prefersDark);
+  useEffect(() => {
+    document.documentElement.classList.toggle("theme-dark", darkChrome);
+  }, [darkChrome]);
+
   return (
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <MaplibreMap
@@ -316,6 +324,8 @@ export default function App() {
       <Inspector pin={pin} onClose={() => setPin(null)} />
 
       <Toast message={error} onDismiss={() => setError(null)} />
+
+      <FullscreenButton />
 
       {!state.url && (
         <EmptyState
