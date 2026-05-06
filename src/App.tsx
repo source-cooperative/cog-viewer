@@ -227,13 +227,55 @@ export default function App() {
         // (the COG layer feeds lng/lat through projectTo4326 for tile lookups).
         if (!data || !bbox || !coord || !("west" in bbox)) return;
         const [lng, lat] = coord;
+        // Linear UV mapping: only correct for 4326 COGs, and even there it
+        // can land on edge-padding nodata pixels at the data boundary
+        // (reprojection mesh extends slightly past the data extent). The
+        // proper fix is to use the COG's native affine transform; pending
+        // that, we search a small neighborhood for a valid sample when the
+        // initial pick lands on nodata.
         const u = (lng - bbox.west) / (bbox.east - bbox.west);
         const v = (bbox.north - lat) / (bbox.north - bbox.south);
         if (u < 0 || u > 1 || v < 0 || v > 1) return;
-        const px = Math.min(data.width - 1, Math.floor(u * data.width));
-        const py = Math.min(data.height - 1, Math.floor(v * data.height));
-        const offset = py * data.width + px;
-        const samples = Array.from(data.cpuBands.entries())
+        const px0 = Math.min(data.width - 1, Math.floor(u * data.width));
+        const py0 = Math.min(data.height - 1, Math.floor(v * data.height));
+
+        const bands = Array.from(data.cpuBands.entries());
+        const isNodataAt = (offset: number): boolean => {
+          if (data.nodata === null) return false;
+          for (const [, arr] of bands) {
+            const v = arr[offset] as number;
+            if (Number.isFinite(v) && v === data.nodata) return true;
+          }
+          return false;
+        };
+
+        // Search outward in concentric rings for a non-nodata sample.
+        // Ring r=0 is the original click pixel.
+        const SEARCH_RADIUS = 3;
+        let bestPx = px0;
+        let bestPy = py0;
+        for (let r = 0; r <= SEARCH_RADIUS; r++) {
+          let found = false;
+          for (let dy = -r; dy <= r && !found; dy++) {
+            for (let dx = -r; dx <= r && !found; dx++) {
+              if (r > 0 && Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+              const px = px0 + dx;
+              const py = py0 + dy;
+              if (px < 0 || px >= data.width || py < 0 || py >= data.height)
+                continue;
+              const offset = py * data.width + px;
+              if (!isNodataAt(offset)) {
+                bestPx = px;
+                bestPy = py;
+                found = true;
+              }
+            }
+          }
+          if (found) break;
+        }
+
+        const offset = bestPy * data.width + bestPx;
+        const samples = bands
           .map(([key, arr]) => {
             const band = Number(key);
             const value = arr[offset] as number;
