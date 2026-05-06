@@ -13,6 +13,11 @@ import {
 import type { Texture } from "@luma.gl/core";
 import type { CogState } from "../state/types";
 import {
+  percentileFromHistogram,
+  type AutoStats,
+  type BandStats,
+} from "./stats";
+import {
   Gamma,
   LogStretch,
   PerBandLinearRescale,
@@ -24,30 +29,83 @@ import type { MultiBandTileData } from "./tile-loader";
 type Range = [number, number];
 
 const RESCALE_EPSILON = 1e-9;
+const DEFAULT_PERCENTILE_LO = 0.02;
+const DEFAULT_PERCENTILE_HI = 0.98;
+
 const safeRange = ([lo, hi]: Range): Range =>
   lo === hi ? [lo, lo + RESCALE_EPSILON] : [lo, hi];
 
-function effectiveRescale(state: CogState): Range | null {
+/** 2–98% percentile range from a band's histogram. Falls back to [min, max]
+ * if the histogram is empty (e.g. GDAL_METADATA-only stats with no overview
+ * sample). Mirrors the displayed default in ControlsPanel. */
+function autoRangeFor(stats: BandStats): Range {
+  const hasBins = stats.histogram.some((b) => b > 0);
+  if (!hasBins) return [stats.min, stats.max];
+  return [
+    percentileFromHistogram(stats, DEFAULT_PERCENTILE_LO),
+    percentileFromHistogram(stats, DEFAULT_PERCENTILE_HI),
+  ];
+}
+
+function statsForBand(
+  autoStats: AutoStats | null,
+  band: number,
+): BandStats | null {
+  if (!autoStats?.perBand) return autoStats?.global ?? null;
+  return autoStats.perBand.get(band) ?? autoStats.global ?? null;
+}
+
+/** Resolve a single rescale window. Falls back to the 2–98% percentile of
+ * the chosen band when the user hasn't set an override. */
+function effectiveRescale(
+  state: CogState,
+  autoStats: AutoStats | null,
+  band: number,
+): Range | null {
   if (state.rescale && state.rescale.length > 0) {
     return safeRange(state.rescale[0]);
   }
-  return null;
+  const stats = statsForBand(autoStats, band);
+  return stats ? safeRange(autoRangeFor(stats)) : null;
 }
 
 /** Resolve per-channel rescale for RGB mode: returns three [min, max] pairs.
  * If state.rescale has 3+ pairs, use them as R/G/B. If it has 1, broadcast.
- * Returns null if no rescale is configured. */
+ * Otherwise falls back to the 2–98% percentile of each channel's band. */
 function effectivePerBandRescale(
   state: CogState,
+  autoStats: AutoStats | null,
+  bands: number[],
 ): { mins: [number, number, number]; maxs: [number, number, number] } | null {
-  if (!state.rescale || state.rescale.length === 0) return null;
-  const pairs =
-    state.rescale.length >= 3
-      ? state.rescale.slice(0, 3).map(safeRange)
-      : [safeRange(state.rescale[0]), safeRange(state.rescale[0]), safeRange(state.rescale[0])];
+  if (state.rescale && state.rescale.length > 0) {
+    const pairs =
+      state.rescale.length >= 3
+        ? state.rescale.slice(0, 3).map(safeRange)
+        : [
+            safeRange(state.rescale[0]),
+            safeRange(state.rescale[0]),
+            safeRange(state.rescale[0]),
+          ];
+    return {
+      mins: [pairs[0][0], pairs[1][0], pairs[2][0]],
+      maxs: [pairs[0][1], pairs[1][1], pairs[2][1]],
+    };
+  }
+  // No user override → derive per-channel 2–98% from autoStats.
+  if (!autoStats?.perBand && !autoStats?.global) return null;
+  const ranges: [Range, Range, Range] = [
+    [0, 1],
+    [0, 1],
+    [0, 1],
+  ];
+  for (let i = 0; i < 3; i++) {
+    const band = bands[i] ?? bands[bands.length - 1] ?? 1;
+    const stats = statsForBand(autoStats, band);
+    ranges[i] = stats ? safeRange(autoRangeFor(stats)) : [0, 1];
+  }
   return {
-    mins: [pairs[0][0], pairs[1][0], pairs[2][0]],
-    maxs: [pairs[0][1], pairs[1][1], pairs[2][1]],
+    mins: [ranges[0][0], ranges[1][0], ranges[2][0]],
+    maxs: [ranges[0][1], ranges[1][1], ranges[2][1]],
   };
 }
 
@@ -99,7 +157,10 @@ function pickBand(
 /** RGB renderTile: composes user-selected bands into RGB via
  * `CompositeBands`, then rescales and discards nodata. Re-renders without
  * a re-fetch when the selection changes (within the cached band set). */
-export function buildRgbCompositeRenderTile(state: CogState) {
+export function buildRgbCompositeRenderTile(
+  state: CogState,
+  autoStats: AutoStats | null,
+) {
   return function renderTile(data: MultiBandTileData): RenderTileResult {
     if (data.bands.size === 0) return { renderPipeline: [] };
     const requested = state.bands ?? [1, 2, 3];
@@ -128,7 +189,7 @@ export function buildRgbCompositeRenderTile(state: CogState) {
       });
     }
 
-    const perBand = effectivePerBandRescale(state);
+    const perBand = effectivePerBandRescale(state, autoStats, requested);
     if (perBand) {
       pipeline.push({
         module: PerBandLinearRescale,
@@ -159,6 +220,7 @@ export function buildRgbCompositeRenderTile(state: CogState) {
 export function buildSingleCompositeRenderTile(
   state: CogState,
   colormapTexture: Texture,
+  autoStats: AutoStats | null,
 ) {
   const name = (state.colormap ?? "viridis").toLowerCase();
   const colormapIndex =
@@ -187,7 +249,11 @@ export function buildSingleCompositeRenderTile(
       });
     }
 
-    const rescale = effectiveRescale(state);
+    const rescale = effectiveRescale(
+      state,
+      autoStats,
+      state.bands?.[0] ?? 1,
+    );
     if (rescale) {
       pipeline.push({
         module: LinearRescale,

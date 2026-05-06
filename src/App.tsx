@@ -193,8 +193,8 @@ export default function App() {
     // fall back to RGB rendering until that's ready.
     const renderTile =
       state.mode === "single" && colormapTexture
-        ? buildSingleCompositeRenderTile(state, colormapTexture)
-        : buildRgbCompositeRenderTile(state);
+        ? buildSingleCompositeRenderTile(state, colormapTexture, autoStats)
+        : buildRgbCompositeRenderTile(state, autoStats);
 
     // beforeId places the COG below the first symbol (label) layer so labels
     // remain readable. Read by @deck.gl/mapbox's MapboxOverlay in interleaved
@@ -282,6 +282,7 @@ export default function App() {
     firstSymbolId,
     colormapTexture,
     bandNames,
+    autoStats,
   ]);
 
   // Apply the dark theme to <html> so portal-rendered children

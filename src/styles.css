@@ -13,6 +13,7 @@
   --text-muted: rgba(44, 50, 51, 0.65);
   --accent: #2c3233;
   --accent-on: #ffffff;
+  --accent-hover: #1f2324;
   --shadow-sm: 0 1px 2px rgba(44, 50, 51, 0.08);
   --shadow: 0 4px 16px rgba(44, 50, 51, 0.12);
 
@@ -33,6 +34,7 @@
   --text-muted: rgba(239, 235, 234, 0.62);
   --accent: #e8e6e4;
   --accent-on: #1a1d1e;
+  --accent-hover: #f5f3f1;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
 
@@ -86,7 +88,8 @@ button.primary {
   border-color: var(--accent);
 }
 button.primary:hover:not(:disabled) {
-  background: #1f2324;
+  background: var(--accent-hover);
+  color: var(--accent-on);
 }
 
 input[type="text"],
