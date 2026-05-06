@@ -68,21 +68,6 @@ function defaultPercentileRange(stats: BandStats): [number, number] {
   ];
 }
 
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="section">
-      <div className="section-title">{title}</div>
-      {children}
-    </div>
-  );
-}
-
 function CollapsibleSection({
   title,
   children,
@@ -568,7 +553,7 @@ export function ControlsPanel({
         <>
           {state.url && (
             <>
-              <Section title="Source">
+              <CollapsibleSection title="Source" defaultOpen>
                 <Field label="Mode" info={HELP.mode}>
                 <select
                   aria-label="mode"
@@ -636,9 +621,9 @@ export function ControlsPanel({
                   </select>
                 </Field>
               )}
-              </Section>
+              </CollapsibleSection>
 
-              <Section title="Rendering">
+              <CollapsibleSection title="Rendering" defaultOpen>
                 <RescaleSection
                   mode={effectiveMode}
                   bands={effectiveBands}
@@ -679,7 +664,7 @@ export function ControlsPanel({
                     }
                   />
                 </Field>
-              </Section>
+              </CollapsibleSection>
 
               <CollapsibleSection title="Advanced">
                 <Field label="Nodata" info={HELP.nodata}>
