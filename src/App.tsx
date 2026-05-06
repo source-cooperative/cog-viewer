@@ -191,17 +191,17 @@ export default function App() {
         : buildRgbCompositeRenderTile(state);
 
     // beforeId places the COG below the first symbol (label) layer so labels
-    // remain readable. Undefined = append on top — used when labelsAbove is
-    // off, or when the basemap has no labels (satellite / off / pre-load).
-    const beforeId = state.labelsAbove ? firstSymbolId : undefined;
-
-    return new COGLayer({
+    // remain readable. Read by @deck.gl/mapbox's MapboxOverlay in interleaved
+    // mode but missing from COGLayer's narrower props type — extract to a
+    // const so structural assignability applies instead of the excess-property
+    // check.
+    const cogProps = {
       id: "cog",
       geotiff,
       opacity: state.opacity,
       getTileData,
       renderTile,
-      beforeId,
+      beforeId: state.labelsAbove ? firstSymbolId : undefined,
       onGeoTIFFLoad: (
         tiff: GeoTIFF,
         options: {
@@ -219,7 +219,8 @@ export default function App() {
           { padding: 40, duration: 800 },
         );
       },
-    });
+    };
+    return new COGLayer(cogProps);
   }, [
     geotiff,
     state.opacity,
