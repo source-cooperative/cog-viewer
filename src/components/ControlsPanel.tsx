@@ -68,6 +68,40 @@ function defaultPercentileRange(stats: BandStats): [number, number] {
   ];
 }
 
+function Section({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="section">
+      <div className="section-title">{title}</div>
+      {children}
+    </div>
+  );
+}
+
+function CollapsibleSection({
+  title,
+  children,
+  defaultOpen = false,
+}: {
+  title: string;
+  children: React.ReactNode;
+  defaultOpen?: boolean;
+}) {
+  return (
+    <details className="section" open={defaultOpen}>
+      <summary>
+        <span className="section-title">{title}</span>
+      </summary>
+      <div className="section-body">{children}</div>
+    </details>
+  );
+}
+
 function Field({
   label,
   info,
@@ -505,7 +539,7 @@ export function ControlsPanel({
         padding: "8px 12px",
         zIndex: 5,
         display: "grid",
-        gap: 12,
+        gap: 14,
         maxHeight: "calc(100vh - 32px)",
         overflowX: "hidden",
         overflowY: "auto",
@@ -531,55 +565,56 @@ export function ControlsPanel({
 
       {open && (
         <>
-          <Field label="Basemap" info={HELP.basemap}>
-            <select
-              aria-label="basemap"
-              value={state.basemap}
-              onChange={(e) =>
-                update({ basemap: e.target.value as Basemap })
-              }
-            >
-              {BASEMAP_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-            <label
-              style={{
-                display: "flex",
-                gap: 6,
-                alignItems: "center",
-                fontSize: 12,
-                marginTop: 4,
-              }}
-            >
-              <input
-                aria-label="labels-above"
-                type="checkbox"
-                checked={state.labelsAbove}
+          <Section title="Map">
+            <Field label="Basemap" info={HELP.basemap}>
+              <select
+                aria-label="basemap"
+                value={state.basemap}
                 onChange={(e) =>
-                  update({ labelsAbove: e.target.checked })
+                  update({ basemap: e.target.value as Basemap })
                 }
-              />
-              <span
+              >
+                {BASEMAP_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+              <label
                 style={{
-                  display: "inline-flex",
-                  alignItems: "center",
+                  display: "flex",
                   gap: 6,
+                  alignItems: "center",
+                  fontSize: 12,
+                  marginTop: 4,
                 }}
               >
-                Labels above data
-                <InfoIcon text={HELP.labels} />
-              </span>
-            </label>
-          </Field>
+                <input
+                  aria-label="labels-above"
+                  type="checkbox"
+                  checked={state.labelsAbove}
+                  onChange={(e) =>
+                    update({ labelsAbove: e.target.checked })
+                  }
+                />
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  Labels above data
+                  <InfoIcon text={HELP.labels} />
+                </span>
+              </label>
+            </Field>
+          </Section>
 
           {state.url && (
             <>
-              <hr className="divider" />
-
-              <Field label="Mode" info={HELP.mode}>
+              <Section title="Source">
+                <Field label="Mode" info={HELP.mode}>
                 <select
                   aria-label="mode"
                   value={effectiveMode}
@@ -646,32 +681,53 @@ export function ControlsPanel({
                   </select>
                 </Field>
               )}
+              </Section>
 
-              <RescaleSection
-                mode={effectiveMode}
-                bands={effectiveBands}
-                autoStats={autoStats}
-                state={state}
-                update={update}
-              />
+              <Section title="Rendering">
+                <RescaleSection
+                  mode={effectiveMode}
+                  bands={effectiveBands}
+                  autoStats={autoStats}
+                  state={state}
+                  update={update}
+                />
 
-              {effectiveMode === "single" && (
-                <Field label="Colormap" info={HELP.colormap}>
-                  <select
-                    aria-label="colormap"
-                    value={state.colormap ?? "viridis"}
-                    onChange={(e) => update({ colormap: e.target.value })}
-                  >
-                    {COLORMAP_NAMES.map((n) => (
-                      <option key={n} value={n}>
-                        {n}
-                      </option>
-                    ))}
-                  </select>
+                {effectiveMode === "single" && (
+                  <Field label="Colormap" info={HELP.colormap}>
+                    <select
+                      aria-label="colormap"
+                      value={state.colormap ?? "viridis"}
+                      onChange={(e) => update({ colormap: e.target.value })}
+                    >
+                      {COLORMAP_NAMES.map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+
+                <Field
+                  label={`Opacity (${state.opacity.toFixed(2)})`}
+                  info={HELP.opacity}
+                >
+                  <input
+                    aria-label="opacity"
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={state.opacity}
+                    onChange={(e) =>
+                      update({ opacity: Number(e.target.value) })
+                    }
+                  />
                 </Field>
-              )}
+              </Section>
 
-              <Field label="Nodata" info={HELP.nodata}>
+              <CollapsibleSection title="Advanced">
+                <Field label="Nodata" info={HELP.nodata}>
                 <div
                   style={{
                     display: "grid",
@@ -816,23 +872,7 @@ export function ControlsPanel({
                 </div>
               </Field>
 
-              <Field
-                label={`Opacity (${state.opacity.toFixed(2)})`}
-                info={HELP.opacity}
-              >
-                <input
-                  aria-label="opacity"
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.01}
-                  value={state.opacity}
-                  onChange={(e) =>
-                    update({ opacity: Number(e.target.value) })
-                  }
-                />
-              </Field>
-
+              </CollapsibleSection>
             </>
           )}
         </>
