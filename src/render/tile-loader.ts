@@ -62,65 +62,13 @@ function singleBandFormat(data: RasterTypedArray): TextureFormat {
   if (data instanceof Uint8Array || data instanceof Uint8ClampedArray) {
     return "r8unorm";
   }
-  // Uint16/Int16 → r16float via JS-side half-float encoding (see
-  // encodeHalfFloatArray). Half memory of r32float at the cost of
-  // precision above ±2048; acceptable for visualization since the
-  // rescale window + colormap quantize the output anyway.
-  if (data instanceof Uint16Array || data instanceof Int16Array) {
-    return "r16float";
-  }
-  // Float32 / Int32 / Uint32 / Float64 / etc. → r32float for full
-  // precision. The non-Float32 types upcast to Float32 in
-  // coerceForFormat (precision loss for ints above 2^24, acceptable).
+  // Anything else → r32float. Full precision; the right answer for
+  // both float COGs and integer-encoded reflectance/elevation. We
+  // briefly tried r16float via JS-side half-float encoding to halve
+  // GPU memory but the precision rounding broke nodata equality
+  // (encoded -9999 ≠ uniform -9999) and quantized values too coarsely
+  // for accurate rescale on data spanning > 2048 in magnitude.
   return "r32float";
-}
-
-const F32 = new Float32Array(1);
-const U32 = new Uint32Array(F32.buffer);
-
-/** Encode an IEEE 754 single-precision float to a 16-bit half-float bit
- * pattern. Mirrors the standard JS implementation; handles ±0,
- * subnormals, ±Inf, and NaN. Used for r16float texture uploads, which
- * the WebGL backend requires as Uint16Array. */
-function floatToHalfBits(value: number): number {
-  F32[0] = value;
-  const x = U32[0];
-  const sign = (x >>> 16) & 0x8000;
-  let exp = (x >>> 23) & 0xff;
-  let mant = x & 0x7fffff;
-  if (exp === 0xff) {
-    // Inf or NaN. Preserve NaN-ness; clamp signaling bits.
-    return sign | 0x7c00 | (mant ? 0x0200 : 0);
-  }
-  exp = exp - 127 + 15;
-  if (exp >= 0x1f) {
-    // Overflow → ±Inf.
-    return sign | 0x7c00;
-  }
-  if (exp <= 0) {
-    // Subnormal or underflow.
-    if (exp < -10) return sign;
-    mant = (mant | 0x800000) >>> (1 - exp);
-    // Round to nearest even.
-    if (mant & 0x1000) mant += 0x2000;
-    return sign | (mant >>> 13);
-  }
-  // Round to nearest even.
-  if (mant & 0x1000) {
-    mant += 0x2000;
-    if (mant & 0x800000) {
-      mant = 0;
-      exp += 1;
-      if (exp >= 0x1f) return sign | 0x7c00;
-    }
-  }
-  return sign | (exp << 10) | (mant >>> 13);
-}
-
-function encodeHalfFloatArray(src: ArrayLike<number>): Uint16Array {
-  const out = new Uint16Array(src.length);
-  for (let i = 0; i < src.length; i++) out[i] = floatToHalfBits(src[i]);
-  return out;
 }
 
 /** Divisor that converts source-unit sample values into the value the GPU
@@ -129,24 +77,17 @@ function sampleScaleForFormat(format: TextureFormat): number {
   return format === "r8unorm" ? 255 : 1;
 }
 
-/** Re-encode source data to match the upload requirements of the chosen
- * texture format. r8unorm passes Uint8Array straight through; r16float
- * needs Uint16Array containing half-float bit patterns; r32float needs
- * Float32Array. */
+/** Cast non-Float32 source data to Float32 for upload into r32float
+ * textures. r8unorm passes Uint8Array straight through. */
 function coerceForFormat(
   array: RasterTypedArray,
   format: TextureFormat,
 ): RasterTypedArray {
-  if (format === "r16float") {
-    return encodeHalfFloatArray(array as unknown as ArrayLike<number>);
-  }
-  if (format === "r32float") {
-    if (array instanceof Float32Array) return array;
-    const out = new Float32Array(array.length);
-    for (let i = 0; i < array.length; i++) out[i] = array[i] as number;
-    return out;
-  }
-  return array;
+  if (format !== "r32float") return array;
+  if (array instanceof Float32Array) return array;
+  const out = new Float32Array(array.length);
+  for (let i = 0; i < array.length; i++) out[i] = array[i] as number;
+  return out;
 }
 
 function extractBand(

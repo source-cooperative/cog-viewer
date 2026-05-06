@@ -14,6 +14,21 @@ type RescaleProps = { rescaleMin: [number, number, number]; rescaleMax: [number,
 type GammaProps = { gamma: number };
 type LogStretchProps = { strength: number };
 
+/** Discards pixels whose red channel is NaN. Float32 COGs commonly use
+ * NaN as the nodata sentinel, but the upstream `FilterNoDataVal` does an
+ * `==` comparison which IEEE 754 says is always false for NaN. Use this
+ * module instead when the COG's declared nodata value is NaN. */
+export const FilterNaN = {
+  name: "filterNaN",
+  inject: {
+    "fs:DECKGL_FILTER_COLOR": `
+  if (isnan(color.r)) {
+    discard;
+  }
+`,
+  },
+} as const;
+
 /** Per-channel `LinearRescale`. Same idea as the shipped `LinearRescale`,
  * but min/max are vec3 so each band gets its own range. */
 export const PerBandLinearRescale = {

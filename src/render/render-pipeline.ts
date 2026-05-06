@@ -18,6 +18,7 @@ import {
   type BandStats,
 } from "./stats";
 import {
+  FilterNaN,
   Gamma,
   LogStretch,
   PerBandLinearRescale,
@@ -131,6 +132,24 @@ function effectiveNodata(
   return perTileNodata;
 }
 
+/** Build the nodata-discard module appropriate for the chosen value.
+ * Float32 COGs frequently use NaN as the nodata sentinel; FilterNoDataVal's
+ * `color.r == nodata` comparison is always false for NaN per IEEE 754, so
+ * we route NaN nodata through a custom isnan() shader instead. */
+function nodataModule(
+  nodata: number,
+  sampleScale: number,
+): RasterModule | null {
+  if (Number.isNaN(nodata)) {
+    return { module: FilterNaN };
+  }
+  if (!Number.isFinite(nodata)) return null;
+  return {
+    module: FilterNoDataVal,
+    props: { value: nodata / sampleScale },
+  };
+}
+
 /** Pick an existing band name from `data.bands`, falling back to the first
  * cached band (or null if none). Used to clamp user-selected indexes to
  * what was actually fetched. */
@@ -169,16 +188,15 @@ export function buildRgbCompositeRenderTile(
       { module: CompositeBands, props: compositeProps },
     ];
 
-    // Filter nodata BEFORE any rescale / gamma / sigmoidal so the comparison
-    // happens against the texture's native sample value. User input is in
-    // source units; divide by sampleScale to match what the GPU sees after
-    // sampling (e.g. uint8 255 → 1.0 for r8unorm).
+    // Filter nodata BEFORE any rescale / gamma so the comparison happens
+    // against the texture's native sample value. NaN nodata uses the
+    // custom isnan() shader; everything else uses FilterNoDataVal with the
+    // value normalized into the GPU's sample space (uint8 255 → 1.0 for
+    // r8unorm).
     const nodata = effectiveNodata(state, data.nodata);
     if (nodata !== null) {
-      pipeline.push({
-        module: FilterNoDataVal,
-        props: { value: nodata / data.sampleScale },
-      });
+      const module = nodataModule(nodata, data.sampleScale);
+      if (module) pipeline.push(module);
     }
 
     const perBand = effectivePerBandRescale(state, autoStats, requested);
@@ -229,16 +247,13 @@ export function buildSingleCompositeRenderTile(
       { module: CompositeBands, props: compositeProps },
     ];
 
-    // Filter nodata BEFORE rescale / gamma / sigmoidal / colormap so the
-    // comparison runs against the texture's native sample value, not a
-    // colormapped or rescaled output. User input is source units; divide
-    // by sampleScale to match the GPU's post-sampling value.
+    // Filter nodata BEFORE rescale / gamma / colormap so the comparison
+    // runs against the texture's native sample value (NaN-aware via
+    // nodataModule).
     const nodata = effectiveNodata(state, data.nodata);
     if (nodata !== null) {
-      pipeline.push({
-        module: FilterNoDataVal,
-        props: { value: nodata / data.sampleScale },
-      });
+      const module = nodataModule(nodata, data.sampleScale);
+      if (module) pipeline.push(module);
     }
 
     const rescale = effectiveRescale(
