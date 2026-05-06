@@ -57,6 +57,16 @@ function DeckGLOverlay(
 const FETCHED_BANDS = Array.from({ length: MAX_BAND_SLOTS }, (_, i) => i + 1);
 const getTileData = makeMultiBandTileLoader(FETCHED_BANDS);
 
+/** Image-specific URL params that don't make sense across COGs. Cleared
+ * whenever state.url changes (e.g., user pastes a new COG). */
+const IMAGE_SPECIFIC_RESET = {
+  mode: null,
+  bands: null,
+  rescale: null,
+  colormap: null,
+  nodata: null,
+} as const;
+
 export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [state, update] = useCogState();
@@ -68,6 +78,20 @@ export default function App() {
   const [bandCount, setBandCount] = useState<number | null>(null);
   const [bandNames, setBandNames] = useState<Map<number, string> | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Tracks which URL the auto-mode effect has already fired for. Prevents a
+  // late-arriving bandCount from clobbering an explicit user mode pick made
+  // between the URL change and metadata load.
+  const autoModeFiredFor = useRef<string | null>(null);
+
+  // Drop blob: URLs from prior drag-drop sessions on initial mount — they
+  // can't survive a reload, so the map would otherwise show a stuck broken
+  // state with no recovery (EmptyState only renders when !state.url).
+  useEffect(() => {
+    if (state.url?.startsWith("blob:")) {
+      update({ url: null });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Open the GeoTIFF ourselves through the CORS workaround in cog/load-geotiff.
   // Required (not just an optimization) because the geotiff library's
@@ -114,14 +138,23 @@ export default function App() {
     return () => ctrl.abort();
   }, [geotiff]);
 
-  // Single-band COGs need the custom path to render with a colormap;
-  // COGLayer's defaults render single-band as raw grayscale only. Auto-pick
-  // single + colormap when the user hasn't chosen a mode yet.
+  // After bandCount resolves for a URL, fire a one-shot auto-pick of mode +
+  // bands when the user hasn't set them. The ref-guard prevents a late
+  // bandCount from overriding a deliberate user choice made between the URL
+  // change and metadata load. Resets per URL.
   useEffect(() => {
-    if (bandCount !== null && bandCount < 2 && state.mode === null) {
+    if (!state.url) return;
+    if (bandCount === null) return;
+    if (autoModeFiredFor.current === state.url) return;
+    autoModeFiredFor.current = state.url;
+    if (state.mode !== null) return;
+    if (bandCount >= 3) {
+      update({ mode: "rgb", bands: [1, 2, 3] });
+    } else {
+      // 1 or 2 bands → single + colormap. RGB on 2 bands leaves blue empty.
       update({ mode: "single", bands: [1] });
     }
-  }, [bandCount, state.mode, update]);
+  }, [bandCount, state.url, state.mode, update]);
 
   useEffect(() => {
     if (!device) return;
@@ -212,7 +245,11 @@ export default function App() {
 
       <Toast message={error} onDismiss={() => setError(null)} />
 
-      {!state.url && <EmptyState onSubmit={(url) => update({ url })} />}
+      {!state.url && (
+        <EmptyState
+          onSubmit={(url) => update({ url, ...IMAGE_SPECIFIC_RESET })}
+        />
+      )}
     </div>
   );
 }

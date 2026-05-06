@@ -72,6 +72,10 @@ export function ControlsPanel({
   const setOpen = (next: boolean) =>
     update({ panel: next ? "open" : "closed" });
 
+  // The render path falls back to RGB when mode is null (e.g., during the
+  // brief window between URL load and the auto-mode effect firing). Mirror
+  // that in the UI so the band picker doesn't disappear.
+  const effectiveMode: Mode = state.mode ?? "rgb";
   const effectiveBands = state.bands ?? [1, 2, 3];
   const auto = statsForBands(autoStats, effectiveBands);
   const effectiveRescale = state.rescale?.[0] ?? auto ?? [0, 1];
@@ -145,7 +149,7 @@ export function ControlsPanel({
               <Field label="Mode">
                 <select
                   aria-label="mode"
-                  value={state.mode ?? "rgb"}
+                  value={effectiveMode}
                   onChange={(e) =>
                     update({
                       mode: e.target.value as Mode,
@@ -161,7 +165,7 @@ export function ControlsPanel({
                 </select>
               </Field>
 
-              {state.mode === "rgb" && (
+              {effectiveMode === "rgb" && (
                 <Field label="Bands (R, G, B)">
                   <div
                     style={{
@@ -192,7 +196,7 @@ export function ControlsPanel({
                 </Field>
               )}
 
-              {state.mode === "single" && (
+              {effectiveMode === "single" && (
                 <Field label="Band">
                   <select
                     aria-label="band"
@@ -266,7 +270,7 @@ export function ControlsPanel({
                 )}
               </Field>
 
-              {state.mode === "single" && (
+              {effectiveMode === "single" && (
                 <Field label="Colormap">
                   <select
                     aria-label="colormap"
