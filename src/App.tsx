@@ -14,6 +14,11 @@ import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
 import { isDarkChrome, resolveBasemap } from "./basemaps";
 import { loadGeoTIFF } from "./cog/load-geotiff";
+import {
+  crsToTilePixel,
+  makeLngLatToCogCrs,
+  type LngLatToCrs,
+} from "./cog/projection";
 import { ControlsPanel } from "./components/ControlsPanel";
 import { EmptyState } from "./components/EmptyState";
 import { FullscreenButton } from "./components/FullscreenButton";
@@ -80,6 +85,7 @@ export default function App() {
   const [autoStats, setAutoStats] = useState<AutoStats | null>(null);
   const [bandCount, setBandCount] = useState<number | null>(null);
   const [bandNames, setBandNames] = useState<Map<number, string> | null>(null);
+  const [lngLatToCrs, setLngLatToCrs] = useState<LngLatToCrs | null>(null);
   const [error, setError] = useState<string | null>(null);
   // First symbol (label) layer id in the active basemap style. Used as
   // beforeId so the COG draws under labels when state.labelsAbove is true.
@@ -113,6 +119,7 @@ export default function App() {
     setAutoStats(null);
     setBandCount(null);
     setBandNames(null);
+    setLngLatToCrs(null);
     setError(null);
     const url = state.url;
     if (!url) return;
@@ -227,55 +234,32 @@ export default function App() {
         // (the COG layer feeds lng/lat through projectTo4326 for tile lookups).
         if (!data || !bbox || !coord || !("west" in bbox)) return;
         const [lng, lat] = coord;
-        // Linear UV mapping: only correct for 4326 COGs, and even there it
-        // can land on edge-padding nodata pixels at the data boundary
-        // (reprojection mesh extends slightly past the data extent). The
-        // proper fix is to use the COG's native affine transform; pending
-        // that, we search a small neighborhood for a valid sample when the
-        // initial pick lands on nodata.
-        const u = (lng - bbox.west) / (bbox.east - bbox.west);
-        const v = (bbox.north - lat) / (bbox.north - bbox.south);
-        if (u < 0 || u > 1 || v < 0 || v > 1) return;
-        const px0 = Math.min(data.width - 1, Math.floor(u * data.width));
-        const py0 = Math.min(data.height - 1, Math.floor(v * data.height));
-
-        const bands = Array.from(data.cpuBands.entries());
-        const isNodataAt = (offset: number): boolean => {
-          if (data.nodata === null) return false;
-          for (const [, arr] of bands) {
-            const v = arr[offset] as number;
-            if (Number.isFinite(v) && v === data.nodata) return true;
-          }
-          return false;
-        };
-
-        // Search outward in concentric rings for a non-nodata sample.
-        // Ring r=0 is the original click pixel.
-        const SEARCH_RADIUS = 3;
-        let bestPx = px0;
-        let bestPy = py0;
-        for (let r = 0; r <= SEARCH_RADIUS; r++) {
-          let found = false;
-          for (let dy = -r; dy <= r && !found; dy++) {
-            for (let dx = -r; dx <= r && !found; dx++) {
-              if (r > 0 && Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
-              const px = px0 + dx;
-              const py = py0 + dy;
-              if (px < 0 || px >= data.width || py < 0 || py >= data.height)
-                continue;
-              const offset = py * data.width + px;
-              if (!isNodataAt(offset)) {
-                bestPx = px;
-                bestPy = py;
-                found = true;
-              }
-            }
-          }
-          if (found) break;
+        // Compute the exact pixel using the COG's native affine transform.
+        // For non-4326 COGs the previous linear UV-from-WGS84-bbox mapping
+        // landed on the wrong pixel because the deck.gl tile bbox is the
+        // reprojected boundary of a tile that's rectangular in the COG's
+        // CRS, not in lat/lng. Project the click into the COG's CRS first,
+        // then invert the tile's affine to get tile-local (col, row).
+        let px0: number;
+        let py0: number;
+        if (lngLatToCrs) {
+          const [crsX, crsY] = lngLatToCrs(lng, lat);
+          const [col, row] = crsToTilePixel(data.transform, crsX, crsY);
+          px0 = Math.round(col);
+          py0 = Math.round(row);
+        } else {
+          // Fallback: linear UV from WGS84 bbox. Used when the COG's CRS
+          // can't be resolved (no EPSG registered with proj4).
+          const u = (lng - bbox.west) / (bbox.east - bbox.west);
+          const v = (bbox.north - lat) / (bbox.north - bbox.south);
+          if (u < 0 || u > 1 || v < 0 || v > 1) return;
+          px0 = Math.floor(u * data.width);
+          py0 = Math.floor(v * data.height);
         }
+        if (px0 < 0 || px0 >= data.width || py0 < 0 || py0 >= data.height) return;
 
-        const offset = bestPy * data.width + bestPx;
-        const samples = bands
+        const offset = py0 * data.width + px0;
+        const samples = Array.from(data.cpuBands.entries())
           .map(([key, arr]) => {
             const band = Number(key);
             const value = arr[offset] as number;
@@ -299,6 +283,7 @@ export default function App() {
       ) => {
         setBandCount(readBandCount(tiff));
         setBandNames(readBandNames(tiff));
+        setLngLatToCrs(() => makeLngLatToCogCrs(tiff));
         const { west, south, east, north } = options.geographicBounds;
         mapRef.current?.fitBounds(
           [
@@ -324,6 +309,7 @@ export default function App() {
     colormapTexture,
     bandNames,
     autoStats,
+    lngLatToCrs,
   ]);
 
   // Apply the dark theme to <html> so portal-rendered children

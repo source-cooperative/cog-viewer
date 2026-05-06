@@ -1,3 +1,4 @@
+import type { Affine } from "@developmentseed/affine";
 import type { GetTileDataOptions } from "@developmentseed/deck.gl-geotiff";
 import type {
   GeoTIFF,
@@ -40,6 +41,13 @@ export type MultiBandTileData = {
    * a float and not normalized, so the divisor is 1.
    */
   sampleScale: number;
+  /**
+   * Affine geotransform from this tile's pixel coordinates (col, row) to
+   * the COG's native CRS coordinates (x, y). Lets the inspector compute
+   * the exact pixel for a click — invert this affine and multiply by the
+   * click point projected into the COG's CRS.
+   */
+  transform: Affine;
 };
 
 /**
@@ -70,10 +78,13 @@ function singleBandFormat(data: RasterTypedArray): TextureFormat {
   if (data instanceof Uint16Array || data instanceof Int16Array) {
     return "r16float";
   }
-  if (data instanceof Float32Array) {
-    return "r32float";
-  }
-  return "r8unorm";
+  // Everything else (Int8, Int32, Uint32, Float32, Float64) goes to r32float.
+  // Int32/Uint32 lose precision above 2^24, which is acceptable for typical
+  // raster ranges; Float64 downcasts to f32. The alternative — leaving
+  // unhandled types to fall through to r8unorm — caused
+  // "texSubImage2D: type UNSIGNED_BYTE but ArrayBufferView not Uint8Array"
+  // because the typed array no longer matched the texture format.
+  return "r32float";
 }
 
 /** Divisor that converts source-unit sample values into the value the GPU
@@ -82,21 +93,17 @@ function sampleScaleForFormat(format: TextureFormat): number {
   return format === "r8unorm" ? 255 : 1;
 }
 
-/** WebGPU/luma can't upload integer typed arrays into float texture formats;
- * cast to Float32 when the format demands it. */
+/** WebGPU/luma can't upload non-Float32 typed arrays into float texture
+ * formats; cast to Float32 when the format demands it. */
 function coerceForFormat(
   array: RasterTypedArray,
   format: TextureFormat,
 ): RasterTypedArray {
-  if (format === "r16float" || format === "r32float") {
-    if (array instanceof Float32Array) return array;
-    if (array instanceof Uint16Array || array instanceof Int16Array) {
-      const out = new Float32Array(array.length);
-      for (let i = 0; i < array.length; i++) out[i] = array[i];
-      return out;
-    }
-  }
-  return array;
+  if (format !== "r16float" && format !== "r32float") return array;
+  if (array instanceof Float32Array) return array;
+  const out = new Float32Array(array.length);
+  for (let i = 0; i < array.length; i++) out[i] = array[i] as number;
+  return out;
 }
 
 function extractBand(
@@ -174,6 +181,7 @@ export function makeMultiBandTileLoader(bandIndexes: number[]) {
       byteLength: totalBytes,
       nodata: array.nodata,
       sampleScale,
+      transform: array.transform,
     };
     if (tileFinalizer && bands.size > 0) {
       tileFinalizer.register(
