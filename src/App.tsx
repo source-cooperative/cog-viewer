@@ -16,6 +16,7 @@ import { resolveBasemap } from "./basemaps";
 import { loadGeoTIFF } from "./cog/load-geotiff";
 import { ControlsPanel } from "./components/ControlsPanel";
 import { EmptyState } from "./components/EmptyState";
+import { Inspector, type InspectorState } from "./components/Inspector";
 import { Toast, humanizeError } from "./components/Toast";
 import {
   buildRgbCompositeRenderTile,
@@ -30,6 +31,7 @@ import {
 import {
   makeMultiBandTileLoader,
   MAX_BAND_SLOTS,
+  type MultiBandTileData,
 } from "./render/tile-loader";
 import { useCogState } from "./state/useCogState";
 
@@ -82,6 +84,9 @@ export default function App() {
   // beforeId so the COG draws under labels when state.labelsAbove is true.
   // Undefined when the basemap has no labels (satellite / off).
   const [firstSymbolId, setFirstSymbolId] = useState<string | undefined>();
+  // Latest hover sample under the cursor, for the pixel inspector. Cleared
+  // when the cursor leaves the COG.
+  const [hover, setHover] = useState<InspectorState | null>(null);
   // Tracks which URL the auto-mode effect has already fired for. Prevents a
   // late-arriving bandCount from clobbering an explicit user mode pick made
   // between the URL change and metadata load.
@@ -201,7 +206,59 @@ export default function App() {
       opacity: state.opacity,
       getTileData,
       renderTile,
+      pickable: true,
       beforeId: state.labelsAbove ? firstSymbolId : undefined,
+      onHover: (info: {
+        x: number;
+        y: number;
+        coordinate?: number[];
+        tile?: {
+          content?: MultiBandTileData | null;
+          bbox?: { west: number; north: number; east: number; south: number }
+            | { left: number; top: number; right: number; bottom: number };
+        };
+      }) => {
+        const tile = info.tile;
+        const data = tile?.content;
+        const bbox = tile?.bbox;
+        const coord = info.coordinate;
+        // bbox may be NonGeoBoundingBox; we only support the geographic case
+        // (the COG layer feeds lng/lat through projectTo4326 for tile lookups).
+        if (
+          !data ||
+          !bbox ||
+          !coord ||
+          !("west" in bbox)
+        ) {
+          setHover(null);
+          return;
+        }
+        const [lng, lat] = coord;
+        const u = (lng - bbox.west) / (bbox.east - bbox.west);
+        const v = (bbox.north - lat) / (bbox.north - bbox.south);
+        if (u < 0 || u > 1 || v < 0 || v > 1) {
+          setHover(null);
+          return;
+        }
+        const px = Math.min(data.width - 1, Math.floor(u * data.width));
+        const py = Math.min(data.height - 1, Math.floor(v * data.height));
+        const offset = py * data.width + px;
+        const samples = Array.from(data.cpuBands.entries())
+          .map(([key, arr]) => {
+            const band = Number(key);
+            const value = arr[offset] as number;
+            return {
+              band,
+              name: bandNames?.get(band) ?? null,
+              value,
+              isNodata:
+                data.nodata !== null && Number.isFinite(value) &&
+                value === data.nodata,
+            };
+          })
+          .sort((a, b) => a.band - b.band);
+        setHover({ x: info.x, y: info.y, lng, lat, samples });
+      },
       onGeoTIFFLoad: (
         tiff: GeoTIFF,
         options: {
@@ -234,6 +291,7 @@ export default function App() {
     state.labelsAbove,
     firstSymbolId,
     colormapTexture,
+    bandNames,
   ]);
 
   return (
@@ -265,6 +323,8 @@ export default function App() {
         bandNames={bandNames}
         autoStats={autoStats}
       />
+
+      <Inspector hover={hover} />
 
       <Toast message={error} onDismiss={() => setError(null)} />
 

@@ -1,7 +1,23 @@
 import { COLORMAP_INDEX } from "@developmentseed/deck.gl-raster/gpu-modules";
-import type { AutoStats } from "../render/stats";
+import {
+  percentileFromHistogram,
+  type AutoStats,
+  type BandStats,
+} from "../render/stats";
 import { MAX_BAND_SLOTS } from "../render/tile-loader";
 import type { Basemap, CogState, CogStateUpdate, Mode } from "../state/types";
+import { BandHistogram } from "./BandHistogram";
+
+/** Default 2-98% percentile range used as the displayed rescale before the
+ * user picks a preset or types a custom range. Matches QGIS / rio-tiler. */
+const DEFAULT_PERCENTILE_LO = 0.02;
+const DEFAULT_PERCENTILE_HI = 0.98;
+
+const RGB_CHANNEL_COLORS: [string, string, string] = [
+  "#d63838",
+  "#2c8a2c",
+  "#2a6db8",
+];
 
 const COLORMAP_NAMES = Object.keys(COLORMAP_INDEX).sort();
 
@@ -26,37 +42,23 @@ function bandLabel(idx: number, names: Map<number, string> | null): string {
   return name ? `${idx} — ${name}` : String(idx);
 }
 
-function statsForBands(
+function statsForBand(
   autoStats: AutoStats | null,
-  bands: number[],
-): [number, number] | null {
-  if (!autoStats?.perBand) return null;
-  const ranges: [number, number][] = [];
-  for (const b of bands) {
-    const r = autoStats.perBand.get(b);
-    if (r) ranges.push(r);
-  }
-  if (ranges.length === 0) return autoStats.global;
-  let lo = 0;
-  let hi = 0;
-  for (const [a, b] of ranges) {
-    lo += a;
-    hi += b;
-  }
-  return [lo / ranges.length, hi / ranges.length];
+  band: number,
+): BandStats | null {
+  if (!autoStats?.perBand) return autoStats?.global ?? null;
+  return autoStats.perBand.get(band) ?? autoStats.global ?? null;
 }
 
-/** Per-band [min, max] for the three currently-selected RGB bands. Falls
- * back to the global auto for any band missing per-band stats. */
-function perBandStats(
-  autoStats: AutoStats | null,
-  bands: number[],
-): [number, number][] | null {
-  if (!autoStats?.perBand) return null;
-  const fallback = autoStats.global ?? [0, 1];
-  return bands.slice(0, 3).map(
-    (b) => autoStats.perBand?.get(b) ?? fallback,
-  );
+/** 2–98% percentile range from a BandStats histogram. Falls back to
+ * [min, max] if the histogram is empty (e.g. GDAL_METADATA-only stats). */
+function defaultPercentileRange(stats: BandStats): [number, number] {
+  const hasBins = stats.histogram.some((b) => b > 0);
+  if (!hasBins) return [stats.min, stats.max];
+  return [
+    percentileFromHistogram(stats, DEFAULT_PERCENTILE_LO),
+    percentileFromHistogram(stats, DEFAULT_PERCENTILE_HI),
+  ];
 }
 
 function Field({
@@ -71,6 +73,251 @@ function Field({
       <span className="field-label">{label}</span>
       {children}
     </label>
+  );
+}
+
+/** Format a number for display in a numeric input. Trims trailing zeros and
+ * stays compact for typical COG ranges (uint8 → integers, reflectance →
+ * 4 sig figs). */
+function fmt(n: number): number {
+  if (!Number.isFinite(n)) return 0;
+  // Round to 4 significant digits without losing integer precision.
+  const abs = Math.abs(n);
+  if (abs >= 1) return Number(n.toFixed(2));
+  return Number(n.toPrecision(4));
+}
+
+type RescaleRowProps = {
+  stats: BandStats | null;
+  value: [number, number];
+  onChange: (next: [number, number]) => void;
+  color: string;
+  label?: string;
+  ariaPrefix: string;
+};
+
+/** One row of histogram + numeric inputs for a band's rescale range. */
+function RescaleRow({
+  stats,
+  value,
+  onChange,
+  color,
+  label,
+  ariaPrefix,
+}: RescaleRowProps) {
+  return (
+    <div style={{ display: "grid", gap: 4 }}>
+      {stats && (
+        <BandHistogram
+          stats={stats}
+          value={value}
+          onChange={onChange}
+          color={color}
+          label={label}
+          height={64}
+        />
+      )}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: label
+            ? "16px minmax(0, 1fr) minmax(0, 1fr)"
+            : "minmax(0, 1fr) minmax(0, 1fr)",
+          gap: 6,
+          alignItems: "center",
+        }}
+      >
+        {label && (
+          <span
+            style={{
+              fontSize: 11,
+              color: "var(--text-muted)",
+              textAlign: "center",
+            }}
+          >
+            {label}
+          </span>
+        )}
+        <input
+          aria-label={`${ariaPrefix}-min`}
+          type="number"
+          step="any"
+          value={fmt(value[0])}
+          onChange={(e) => onChange([Number(e.target.value), value[1]])}
+        />
+        <input
+          aria-label={`${ariaPrefix}-max`}
+          type="number"
+          step="any"
+          value={fmt(value[1])}
+          onChange={(e) => onChange([value[0], Number(e.target.value)])}
+        />
+      </div>
+    </div>
+  );
+}
+
+type RescaleSectionProps = {
+  mode: Mode;
+  bands: number[];
+  autoStats: AutoStats | null;
+  state: CogState;
+  update: (patch: CogStateUpdate) => void;
+};
+
+/** Histogram-driven rescale UI. Displays one scrubber per channel in RGB,
+ * one in single-band. Includes preset buttons (2–98%, Min/Max) plus a
+ * Reset-to-auto fallback when the user has set an explicit override. */
+function RescaleSection({
+  mode,
+  bands,
+  autoStats,
+  state,
+  update,
+}: RescaleSectionProps) {
+  const isAuto = state.rescale === null;
+
+  if (mode === "single") {
+    const stats = statsForBand(autoStats, bands[0] ?? 1);
+    const auto = stats ? defaultPercentileRange(stats) : null;
+    const value: [number, number] =
+      state.rescale?.[0] ?? auto ?? [0, 1];
+
+    const setValue = (next: [number, number]) => update({ rescale: [next] });
+
+    return (
+      <Field
+        label={isAuto && stats ? "Rescale (2–98%) — auto" : "Rescale"}
+      >
+        <RescaleRow
+          stats={stats}
+          value={value}
+          onChange={setValue}
+          color="var(--text)"
+          ariaPrefix="rescale"
+        />
+        <PresetRow
+          show={Boolean(stats)}
+          isAuto={isAuto}
+          onMinMax={() =>
+            stats && setValue([stats.min, stats.max])
+          }
+          onPercentile={() =>
+            auto && update({ rescale: [auto] })
+          }
+          onReset={() => update({ rescale: null })}
+        />
+      </Field>
+    );
+  }
+
+  // RGB mode — three channels. Honor existing per-channel state if present;
+  // else fall back to per-band auto percentiles.
+  const perBandStats: (BandStats | null)[] = bands
+    .slice(0, 3)
+    .map((b) => statsForBand(autoStats, b));
+  const perBandAuto: ([number, number] | null)[] = perBandStats.map((s) =>
+    s ? defaultPercentileRange(s) : null,
+  );
+  const fromState =
+    state.rescale && state.rescale.length >= 3
+      ? state.rescale.slice(0, 3)
+      : null;
+  const values: [number, number][] = [0, 1, 2].map((i) => {
+    if (fromState) return fromState[i] ?? [0, 1];
+    return perBandAuto[i] ?? [0, 1];
+  });
+
+  const setChannel = (i: number, next: [number, number]) => {
+    const out = values.map((v) => [...v] as [number, number]);
+    out[i] = next;
+    update({ rescale: out });
+  };
+
+  return (
+    <Field
+      label={
+        isAuto && perBandStats.some((s) => s !== null)
+          ? "Rescale (2–98%) — auto"
+          : "Rescale"
+      }
+    >
+      <div style={{ display: "grid", gap: 8 }}>
+        {(["R", "G", "B"] as const).map((label, i) => (
+          <RescaleRow
+            key={label}
+            stats={perBandStats[i]}
+            value={values[i]}
+            onChange={(next) => setChannel(i, next)}
+            color={RGB_CHANNEL_COLORS[i]}
+            label={label}
+            ariaPrefix={`rescale-${label.toLowerCase()}`}
+          />
+        ))}
+      </div>
+      <PresetRow
+        show={perBandStats.some((s) => s !== null)}
+        isAuto={isAuto}
+        onMinMax={() =>
+          update({
+            rescale: perBandStats.map<[number, number]>((s, i) =>
+              s ? [s.min, s.max] : values[i],
+            ),
+          })
+        }
+        onPercentile={() =>
+          update({
+            rescale: perBandAuto.map<[number, number]>(
+              (r, i) => r ?? values[i],
+            ),
+          })
+        }
+        onReset={() => update({ rescale: null })}
+      />
+    </Field>
+  );
+}
+
+function PresetRow({
+  show,
+  isAuto,
+  onMinMax,
+  onPercentile,
+  onReset,
+}: {
+  show: boolean;
+  isAuto: boolean;
+  onMinMax: () => void;
+  onPercentile: () => void;
+  onReset: () => void;
+}) {
+  if (!show) return null;
+  return (
+    <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
+      <button
+        type="button"
+        onClick={onPercentile}
+        style={{ padding: "2px 8px", fontSize: 11 }}
+      >
+        2–98%
+      </button>
+      <button
+        type="button"
+        onClick={onMinMax}
+        style={{ padding: "2px 8px", fontSize: 11 }}
+      >
+        Min/Max
+      </button>
+      {!isAuto && (
+        <button
+          type="button"
+          onClick={onReset}
+          style={{ padding: "2px 8px", fontSize: 11 }}
+        >
+          Reset to auto
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -90,20 +337,6 @@ export function ControlsPanel({
   // that in the UI so the band picker doesn't disappear.
   const effectiveMode: Mode = state.mode ?? "rgb";
   const effectiveBands = state.bands ?? [1, 2, 3];
-  const auto = statsForBands(autoStats, effectiveBands);
-  const effectiveRescale = state.rescale?.[0] ?? auto ?? [0, 1];
-  const isAutoRescale = state.rescale === null;
-  // RGB per-band rescale: prefer the user's saved per-band pairs; otherwise
-  // pull from the auto-stats per-band map; otherwise broadcast the single auto.
-  const perBandAuto = perBandStats(autoStats, effectiveBands);
-  const perBandRescale: [number, number][] =
-    state.rescale && state.rescale.length >= 3
-      ? state.rescale.slice(0, 3)
-      : perBandAuto ?? [
-          effectiveRescale,
-          effectiveRescale,
-          effectiveRescale,
-        ];
   // CompositeBands has 4 slots; we always fetch the first up-to-4 bands so
   // users can freely swap among them. Bands beyond that aren't reachable
   // without a re-fetch, so we hide them from the picker.
@@ -257,109 +490,13 @@ export function ControlsPanel({
                 </Field>
               )}
 
-              <Field
-                label={
-                  isAutoRescale && (effectiveMode === "rgb" ? perBandAuto : auto)
-                    ? "Rescale (min, max) — auto"
-                    : "Rescale (min, max)"
-                }
-              >
-                {effectiveMode === "rgb" ? (
-                  <div style={{ display: "grid", gap: 4 }}>
-                    {(["R", "G", "B"] as const).map((label, i) => (
-                      <div
-                        key={label}
-                        style={{
-                          display: "grid",
-                          gridTemplateColumns: "16px minmax(0, 1fr) minmax(0, 1fr)",
-                          gap: 6,
-                          alignItems: "center",
-                        }}
-                      >
-                        <span
-                          style={{
-                            fontSize: 11,
-                            color: "var(--text-muted)",
-                            textAlign: "center",
-                          }}
-                        >
-                          {label}
-                        </span>
-                        <input
-                          aria-label={`rescale-min-${label.toLowerCase()}`}
-                          type="number"
-                          step="any"
-                          value={perBandRescale[i][0]}
-                          onChange={(e) => {
-                            const next = perBandRescale.map((r) => [...r] as [number, number]);
-                            next[i] = [Number(e.target.value), perBandRescale[i][1]];
-                            update({ rescale: next });
-                          }}
-                        />
-                        <input
-                          aria-label={`rescale-max-${label.toLowerCase()}`}
-                          type="number"
-                          step="any"
-                          value={perBandRescale[i][1]}
-                          onChange={(e) => {
-                            const next = perBandRescale.map((r) => [...r] as [number, number]);
-                            next[i] = [perBandRescale[i][0], Number(e.target.value)];
-                            update({ rescale: next });
-                          }}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
-                      gap: 6,
-                    }}
-                  >
-                    <input
-                      aria-label="rescale-min"
-                      type="number"
-                      step="any"
-                      value={effectiveRescale[0]}
-                      onChange={(e) =>
-                        update({
-                          rescale: [
-                            [Number(e.target.value), effectiveRescale[1]],
-                          ],
-                        })
-                      }
-                    />
-                    <input
-                      aria-label="rescale-max"
-                      type="number"
-                      step="any"
-                      value={effectiveRescale[1]}
-                      onChange={(e) =>
-                        update({
-                          rescale: [
-                            [effectiveRescale[0], Number(e.target.value)],
-                          ],
-                        })
-                      }
-                    />
-                  </div>
-                )}
-                {!isAutoRescale && (effectiveMode === "rgb" ? perBandAuto : auto) && (
-                  <button
-                    type="button"
-                    onClick={() => update({ rescale: null })}
-                    style={{
-                      justifySelf: "start",
-                      padding: "2px 8px",
-                      fontSize: 11,
-                    }}
-                  >
-                    Reset to auto
-                  </button>
-                )}
-              </Field>
+              <RescaleSection
+                mode={effectiveMode}
+                bands={effectiveBands}
+                autoStats={autoStats}
+                state={state}
+                update={update}
+              />
 
               {effectiveMode === "single" && (
                 <Field label="Colormap">
