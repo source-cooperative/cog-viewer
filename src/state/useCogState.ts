@@ -6,11 +6,13 @@ import type {
   Mode,
   PanelState,
   Sigmoidal,
+  Stretch,
 } from "./types";
 
 const VALID_MODES: Mode[] = ["rgb", "single"];
 const VALID_BASEMAPS: Basemap[] = ["auto", "light", "dark", "satellite", "off"];
 const VALID_PANEL: PanelState[] = ["open", "closed"];
+const VALID_STRETCH: Stretch[] = ["linear", "log", "sqrt"];
 
 const parseRescale = (raw: string | null): [number, number][] | null => {
   if (!raw) return null;
@@ -89,6 +91,9 @@ export function parseCogState(p: URLSearchParams): CogState {
     gamma: parseGamma(p.get("gamma")),
     sigmoidal: parseSigmoidal(p.get("sigmoidal")),
     labelsAbove: p.get("labels") !== "below",
+    stretch: VALID_STRETCH.includes(p.get("stretch") as Stretch)
+      ? (p.get("stretch") as Stretch)
+      : "linear",
   };
 }
 
@@ -107,6 +112,7 @@ export function serializeCogState(s: CogState): URLSearchParams {
   if (s.gamma !== 1) p.set("gamma", String(s.gamma));
   if (s.sigmoidal) p.set("sigmoidal", `${s.sigmoidal.contrast},${s.sigmoidal.bias}`);
   if (!s.labelsAbove) p.set("labels", "below");
+  if (s.stretch !== "linear") p.set("stretch", s.stretch);
   return p;
 }
 

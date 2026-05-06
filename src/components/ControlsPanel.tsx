@@ -5,7 +5,13 @@ import {
   type BandStats,
 } from "../render/stats";
 import { MAX_BAND_SLOTS } from "../render/tile-loader";
-import type { Basemap, CogState, CogStateUpdate, Mode } from "../state/types";
+import type {
+  Basemap,
+  CogState,
+  CogStateUpdate,
+  Mode,
+  Stretch,
+} from "../state/types";
 import { BandHistogram } from "./BandHistogram";
 
 /** Default 2-98% percentile range used as the displayed rescale before the
@@ -241,6 +247,10 @@ function RescaleSection({
           onPercentile={() => update({ rescale: null })}
           onMinMax={() => minMax && setValue(minMax)}
         />
+        <StretchRow
+          value={state.stretch}
+          onChange={(stretch) => update({ stretch })}
+        />
       </Field>
     );
   }
@@ -308,7 +318,54 @@ function RescaleSection({
           })
         }
       />
+      <StretchRow
+        value={state.stretch}
+        onChange={(stretch) => update({ stretch })}
+      />
     </Field>
+  );
+}
+
+function StretchRow({
+  value,
+  onChange,
+}: {
+  value: Stretch;
+  onChange: (next: Stretch) => void;
+}) {
+  const options: { value: Stretch; label: string }[] = [
+    { value: "linear", label: "Linear" },
+    { value: "sqrt", label: "Sqrt" },
+    { value: "log", label: "Log" },
+  ];
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: 6,
+        marginTop: 4,
+        flexWrap: "wrap",
+        alignItems: "center",
+      }}
+    >
+      <span
+        style={{
+          fontSize: 11,
+          color: "var(--text-muted)",
+          marginRight: 2,
+        }}
+      >
+        Curve
+      </span>
+      {options.map((o) => (
+        <PresetButton
+          key={o.value}
+          label={o.label}
+          active={value === o.value}
+          onClick={() => onChange(o.value)}
+        />
+      ))}
+    </div>
   );
 }
 

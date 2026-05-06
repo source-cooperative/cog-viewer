@@ -13,6 +13,7 @@
 type RescaleProps = { rescaleMin: [number, number, number]; rescaleMax: [number, number, number] };
 type GammaProps = { gamma: number };
 type SigmoidalProps = { contrast: number; bias: number };
+type LogStretchProps = { strength: number };
 
 /** Per-channel `LinearRescale`. Same idea as the shipped `LinearRescale`,
  * but min/max are vec3 so each band gets its own range. */
@@ -59,6 +60,45 @@ export const Gamma = {
   },
   getUniforms: (props: Partial<GammaProps>) => ({
     gammaValue: props.gamma ?? 1.0,
+  }),
+} as const;
+
+/** Square-root stretch on rescaled [0, 1] values. Expands the lower half
+ * of the range into more colormap area; gentler than `LogStretch`. Apply
+ * post-rescale, before gamma/sigmoidal. */
+export const SqrtStretch = {
+  name: "sqrtStretch",
+  inject: {
+    "fs:DECKGL_FILTER_COLOR": `
+  color.rgb = sqrt(clamp(color.rgb, 0.0, 1.0));
+`,
+  },
+} as const;
+
+/** Logarithmic stretch on rescaled [0, 1] values. Maps `x → log(1 + k*x) /
+ * log(1 + k)` so 0 stays at 0 and 1 stays at 1. `k` controls steepness:
+ * higher k → more aggressive expansion of low values. k=99 is a strong
+ * but stable default that handles heavy positive skew. */
+export const LogStretch = {
+  name: "logStretch",
+  fs: `uniform logStretchUniforms {
+  float strength;
+} logStretch;
+`,
+  inject: {
+    "fs:DECKGL_FILTER_COLOR": `
+  {
+    float k = max(logStretch.strength, 0.0001);
+    vec3 x = clamp(color.rgb, 0.0, 1.0);
+    color.rgb = log(1.0 + k * x) / log(1.0 + k);
+  }
+`,
+  },
+  uniformTypes: {
+    strength: "f32",
+  },
+  getUniforms: (props: Partial<LogStretchProps>) => ({
+    strength: props.strength ?? 99,
   }),
 } as const;
 

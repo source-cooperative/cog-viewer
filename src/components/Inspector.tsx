@@ -16,7 +16,8 @@ export type InspectorState = {
 };
 
 type Props = {
-  hover: InspectorState | null;
+  pin: InspectorState | null;
+  onClose: () => void;
 };
 
 function formatValue(v: number): string {
@@ -29,10 +30,10 @@ function formatLngLat(lng: number, lat: number): string {
   return `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
 }
 
-export function Inspector({ hover }: Props) {
-  if (!hover) return null;
-  const { x, y, lng, lat, samples } = hover;
-  // Anchor to bottom-left of the cursor by default; flip near the right edge
+export function Inspector({ pin, onClose }: Props) {
+  if (!pin) return null;
+  const { x, y, lng, lat, samples } = pin;
+  // Anchor to bottom-right of the click by default; flip near the right edge
   // so the panel never escapes the viewport. Vertical flip handled similarly.
   const flipX = x > window.innerWidth - 200;
   const flipY = y > window.innerHeight - 120;
@@ -48,15 +49,38 @@ export function Inspector({ hover }: Props) {
         transform: `translate(${flipX ? "-100%" : "0"}, ${flipY ? "-100%" : "0"})`,
         padding: "6px 10px",
         zIndex: 6,
-        pointerEvents: "none",
         fontSize: 12,
         minWidth: 140,
         display: "grid",
         gap: 4,
       }}
     >
-      <div style={{ color: "var(--text-muted)", fontSize: 11 }}>
-        {formatLngLat(lng, lat)}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 8,
+        }}
+      >
+        <div style={{ color: "var(--text-muted)", fontSize: 11 }}>
+          {formatLngLat(lng, lat)}
+        </div>
+        <button
+          type="button"
+          aria-label="close-inspector"
+          onClick={onClose}
+          style={{
+            all: "unset",
+            cursor: "pointer",
+            color: "var(--text-muted)",
+            fontSize: 14,
+            lineHeight: 1,
+            padding: "0 2px",
+          }}
+        >
+          ×
+        </button>
       </div>
       {samples.length === 0 ? (
         <div style={{ color: "var(--text-muted)" }}>no data loaded</div>

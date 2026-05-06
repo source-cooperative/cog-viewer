@@ -140,6 +140,7 @@ describe("serializeCogState", () => {
       gamma: 1,
       sigmoidal: null,
       labelsAbove: true,
+      stretch: "linear",
     });
     expect(out.toString()).toBe("url=https%3A%2F%2Fx.tif");
   });
@@ -159,6 +160,7 @@ describe("serializeCogState", () => {
       gamma: 1,
       sigmoidal: null,
       labelsAbove: true,
+      stretch: "linear",
     });
     expect(out.toString()).toBe("");
   });
@@ -177,6 +179,7 @@ describe("serializeCogState", () => {
       panel: "closed" as const,
       gamma: 1,
       sigmoidal: null,
+      stretch: "linear" as const,
     };
     expect(
       serializeCogState({ ...base, labelsAbove: true }).toString(),

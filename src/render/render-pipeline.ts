@@ -12,7 +12,13 @@ import {
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import type { Texture } from "@luma.gl/core";
 import type { CogState } from "../state/types";
-import { Gamma, PerBandLinearRescale, Sigmoidal } from "./shader-modules";
+import {
+  Gamma,
+  LogStretch,
+  PerBandLinearRescale,
+  Sigmoidal,
+  SqrtStretch,
+} from "./shader-modules";
 import type { MultiBandTileData } from "./tile-loader";
 
 type Range = [number, number];
@@ -45,10 +51,16 @@ function effectivePerBandRescale(
   };
 }
 
-/** Push the optional adjustments common to RGB and single-band modes:
- * gamma → sigmoidal contrast. Both expect input clamped to 0..1, which the
- * preceding rescale module guarantees. */
+/** Push the optional adjustments common to RGB and single-band modes,
+ * in canonical order: stretch curve → gamma → sigmoidal contrast. All
+ * expect input clamped to 0..1, which the preceding rescale module
+ * guarantees. */
 function pushAdjustments(state: CogState, pipeline: RasterModule[]): void {
+  if (state.stretch === "log") {
+    pipeline.push({ module: LogStretch, props: { strength: 99 } });
+  } else if (state.stretch === "sqrt") {
+    pipeline.push({ module: SqrtStretch });
+  }
   if (state.gamma !== 1) {
     pipeline.push({ module: Gamma, props: { gamma: state.gamma } });
   }

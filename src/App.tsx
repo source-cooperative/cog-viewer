@@ -84,9 +84,9 @@ export default function App() {
   // beforeId so the COG draws under labels when state.labelsAbove is true.
   // Undefined when the basemap has no labels (satellite / off).
   const [firstSymbolId, setFirstSymbolId] = useState<string | undefined>();
-  // Latest hover sample under the cursor, for the pixel inspector. Cleared
-  // when the cursor leaves the COG.
-  const [hover, setHover] = useState<InspectorState | null>(null);
+  // Most recent click-to-inspect reading. Persists until the user dismisses
+  // the inspector or clicks a different pixel.
+  const [pin, setPin] = useState<InspectorState | null>(null);
   // Tracks which URL the auto-mode effect has already fired for. Prevents a
   // late-arriving bandCount from clobbering an explicit user mode pick made
   // between the URL change and metadata load.
@@ -208,7 +208,7 @@ export default function App() {
       renderTile,
       pickable: true,
       beforeId: state.labelsAbove ? firstSymbolId : undefined,
-      onHover: (info: {
+      onClick: (info: {
         x: number;
         y: number;
         coordinate?: number[];
@@ -224,22 +224,11 @@ export default function App() {
         const coord = info.coordinate;
         // bbox may be NonGeoBoundingBox; we only support the geographic case
         // (the COG layer feeds lng/lat through projectTo4326 for tile lookups).
-        if (
-          !data ||
-          !bbox ||
-          !coord ||
-          !("west" in bbox)
-        ) {
-          setHover(null);
-          return;
-        }
+        if (!data || !bbox || !coord || !("west" in bbox)) return;
         const [lng, lat] = coord;
         const u = (lng - bbox.west) / (bbox.east - bbox.west);
         const v = (bbox.north - lat) / (bbox.north - bbox.south);
-        if (u < 0 || u > 1 || v < 0 || v > 1) {
-          setHover(null);
-          return;
-        }
+        if (u < 0 || u > 1 || v < 0 || v > 1) return;
         const px = Math.min(data.width - 1, Math.floor(u * data.width));
         const py = Math.min(data.height - 1, Math.floor(v * data.height));
         const offset = py * data.width + px;
@@ -257,7 +246,7 @@ export default function App() {
             };
           })
           .sort((a, b) => a.band - b.band);
-        setHover({ x: info.x, y: info.y, lng, lat, samples });
+        setPin({ x: info.x, y: info.y, lng, lat, samples });
       },
       onGeoTIFFLoad: (
         tiff: GeoTIFF,
@@ -324,7 +313,7 @@ export default function App() {
         autoStats={autoStats}
       />
 
-      <Inspector hover={hover} />
+      <Inspector pin={pin} onClose={() => setPin(null)} />
 
       <Toast message={error} onDismiss={() => setError(null)} />
 
