@@ -565,52 +565,6 @@ export function ControlsPanel({
 
       {open && (
         <>
-          <Section title="Map">
-            <Field label="Basemap" info={HELP.basemap}>
-              <select
-                aria-label="basemap"
-                value={state.basemap}
-                onChange={(e) =>
-                  update({ basemap: e.target.value as Basemap })
-                }
-              >
-                {BASEMAP_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-              <label
-                style={{
-                  display: "flex",
-                  gap: 6,
-                  alignItems: "center",
-                  fontSize: 12,
-                  marginTop: 4,
-                }}
-              >
-                <input
-                  aria-label="labels-above"
-                  type="checkbox"
-                  checked={state.labelsAbove}
-                  onChange={(e) =>
-                    update({ labelsAbove: e.target.checked })
-                  }
-                />
-                <span
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 6,
-                  }}
-                >
-                  Labels above data
-                  <InfoIcon text={HELP.labels} />
-                </span>
-              </label>
-            </Field>
-          </Section>
-
           {state.url && (
             <>
               <Section title="Source">
@@ -875,6 +829,52 @@ export function ControlsPanel({
               </CollapsibleSection>
             </>
           )}
+
+          <CollapsibleSection title="Map">
+            <Field label="Basemap" info={HELP.basemap}>
+              <select
+                aria-label="basemap"
+                value={state.basemap}
+                onChange={(e) =>
+                  update({ basemap: e.target.value as Basemap })
+                }
+              >
+                {BASEMAP_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+              <label
+                style={{
+                  display: "flex",
+                  gap: 6,
+                  alignItems: "center",
+                  fontSize: 12,
+                  marginTop: 4,
+                }}
+              >
+                <input
+                  aria-label="labels-above"
+                  type="checkbox"
+                  checked={state.labelsAbove}
+                  onChange={(e) =>
+                    update({ labelsAbove: e.target.checked })
+                  }
+                />
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  Labels above data
+                  <InfoIcon text={HELP.labels} />
+                </span>
+              </label>
+            </Field>
+          </CollapsibleSection>
         </>
       )}
     </div>
