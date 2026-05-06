@@ -14,22 +14,19 @@ type Props = {
   label?: string;
 };
 
-const HANDLE_RADIUS = 6;
-const HANDLE_HIT_RADIUS = 12;
-
-/** SVG histogram with two draggable handles defining a rescale range. The
- * shaded band between the handles indicates the active region; clicking on
- * the chart snaps the nearest handle to that x value. The component is
- * controlled — the parent owns `value` and writes back via `onChange`. */
+/** SVG histogram + HTML handle overlays for a rescale range. The SVG bars
+ * stretch to fill the width via `preserveAspectRatio="none"`; the handles
+ * themselves are absolutely-positioned `<div>`s so they stay perfectly
+ * circular regardless of the container's aspect ratio. */
 export function BandHistogram({
   stats,
   value,
   onChange,
   color = "var(--text)",
-  height = 80,
+  height = 64,
   label,
 }: Props) {
-  const ref = useRef<SVGSVGElement | null>(null);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
   // Track which handle (low/high) is being dragged. null = idle.
   const [dragging, setDragging] = useState<"lo" | "hi" | null>(null);
 
@@ -40,8 +37,8 @@ export function BandHistogram({
     [stats.histogram],
   );
 
-  // [stats.min .. stats.max] → [0 .. 1] in chart coords.
-  const toFrac = (v: number) => Math.max(0, Math.min(1, (v - stats.min) / safeRange));
+  const toFrac = (v: number) =>
+    Math.max(0, Math.min(1, (v - stats.min) / safeRange));
   const fromFrac = (f: number) => stats.min + f * safeRange;
 
   const lo = Math.min(value[0], value[1]);
@@ -49,12 +46,11 @@ export function BandHistogram({
   const loFrac = toFrac(lo);
   const hiFrac = toFrac(hi);
 
-  /** Convert a pointer event's clientX to the source-unit value. */
   const xToValue = useCallback(
     (clientX: number): number => {
-      const svg = ref.current;
-      if (!svg) return stats.min;
-      const rect = svg.getBoundingClientRect();
+      const wrap = wrapRef.current;
+      if (!wrap) return stats.min;
+      const rect = wrap.getBoundingClientRect();
       if (rect.width === 0) return stats.min;
       const fx = (clientX - rect.left) / rect.width;
       return fromFrac(Math.max(0, Math.min(1, fx)));
@@ -64,47 +60,46 @@ export function BandHistogram({
   );
 
   const beginDrag = useCallback(
-    (which: "lo" | "hi", e: React.PointerEvent<SVGElement>) => {
-      e.preventDefault();
-      e.stopPropagation();
-      (e.target as Element).setPointerCapture?.(e.pointerId);
-      setDragging(which);
-    },
+    (which: "lo" | "hi") =>
+      (e: React.PointerEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+        setDragging(which);
+      },
     [],
   );
 
   const handlePointerMove = useCallback(
-    (e: React.PointerEvent<SVGSVGElement>) => {
+    (e: React.PointerEvent<HTMLDivElement>) => {
       if (!dragging) return;
       const v = xToValue(e.clientX);
-      if (dragging === "lo") {
-        onChange([Math.min(v, hi), hi]);
-      } else {
-        onChange([lo, Math.max(v, lo)]);
-      }
+      if (dragging === "lo") onChange([Math.min(v, hi), hi]);
+      else onChange([lo, Math.max(v, lo)]);
     },
     [dragging, hi, lo, onChange, xToValue],
   );
 
   const handlePointerUp = useCallback(
-    (e: React.PointerEvent<SVGSVGElement>) => {
+    (e: React.PointerEvent<HTMLDivElement>) => {
       if (!dragging) return;
-      (e.target as Element).releasePointerCapture?.(e.pointerId);
+      (e.currentTarget as Element).releasePointerCapture?.(e.pointerId);
       setDragging(null);
     },
     [dragging],
   );
 
-  /** Click on chart background → snap nearest handle. */
+  /** Click on the chart background → snap nearest handle and continue as drag. */
   const handleBackgroundDown = useCallback(
-    (e: React.PointerEvent<SVGSVGElement>) => {
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      // Don't hijack a pointerdown that originated on a handle.
+      const target = e.target as HTMLElement;
+      if (target.dataset.handle) return;
       const v = xToValue(e.clientX);
-      const dLo = Math.abs(v - lo);
-      const dHi = Math.abs(v - hi);
-      const which: "lo" | "hi" = dLo <= dHi ? "lo" : "hi";
+      const which: "lo" | "hi" =
+        Math.abs(v - lo) <= Math.abs(v - hi) ? "lo" : "hi";
       if (which === "lo") onChange([Math.min(v, hi), hi]);
       else onChange([lo, Math.max(v, lo)]);
-      // Continue as a drag.
       (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
       setDragging(which);
     },
@@ -121,105 +116,104 @@ export function BandHistogram({
           {label}
         </span>
       )}
-      <svg
-        ref={ref}
-        viewBox={`0 0 100 ${height}`}
-        preserveAspectRatio="none"
-        width="100%"
-        height={height}
-        style={{ cursor: dragging ? "grabbing" : "crosshair", touchAction: "none" }}
+      <div
+        ref={wrapRef}
         onPointerDown={handleBackgroundDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
         onPointerCancel={handlePointerUp}
+        style={{
+          position: "relative",
+          height,
+          cursor: dragging ? "grabbing" : "crosshair",
+          touchAction: "none",
+          userSelect: "none",
+        }}
       >
-        <rect width="100" height={height} fill="var(--surface-muted)" />
-
-        {/* Histogram bars */}
-        {stats.histogram.map((count, i) => {
-          const w = 100 / stats.histogram.length;
-          const h = (count / maxBin) * (height - 4);
-          return (
-            <rect
-              key={i}
-              x={i * w}
-              y={height - h}
-              width={w}
-              height={h}
-              fill={color}
-              opacity={0.55}
-            />
-          );
-        })}
-
-        {/* Shaded selected region */}
-        <rect
-          x={loFrac * 100}
-          y={0}
-          width={(hiFrac - loFrac) * 100}
+        <svg
+          viewBox={`0 0 100 ${height}`}
+          preserveAspectRatio="none"
+          width="100%"
           height={height}
-          fill={color}
-          opacity={0.12}
-        />
+          style={{
+            position: "absolute",
+            inset: 0,
+            display: "block",
+            pointerEvents: "none",
+          }}
+        >
+          <rect width="100" height={height} fill="var(--surface-muted)" />
 
-        {/* Handle tracks */}
-        <line
-          x1={loFrac * 100}
-          y1={0}
-          x2={loFrac * 100}
-          y2={height}
-          stroke={color}
-          strokeWidth={0.6}
-        />
-        <line
-          x1={hiFrac * 100}
-          y1={0}
-          x2={hiFrac * 100}
-          y2={height}
-          stroke={color}
-          strokeWidth={0.6}
-        />
+          {stats.histogram.map((count, i) => {
+            const w = 100 / stats.histogram.length;
+            const h = (count / maxBin) * (height - 4);
+            return (
+              <rect
+                key={i}
+                x={i * w}
+                y={height - h}
+                width={w}
+                height={h}
+                fill={color}
+                opacity={0.55}
+              />
+            );
+          })}
 
-        {/* Handles. preserveAspectRatio=none stretches the viewBox, so we
-         * place handles in viewBox coordinates with a small visual width. */}
+          <rect
+            x={loFrac * 100}
+            y={0}
+            width={(hiFrac - loFrac) * 100}
+            height={height}
+            fill={color}
+            opacity={0.12}
+          />
+        </svg>
+
         <Handle
           xPct={loFrac * 100}
-          y={height / 2}
           color={color}
-          onPointerDown={(e) => beginDrag("lo", e)}
+          onPointerDown={beginDrag("lo")}
         />
         <Handle
           xPct={hiFrac * 100}
-          y={height / 2}
           color={color}
-          onPointerDown={(e) => beginDrag("hi", e)}
+          onPointerDown={beginDrag("hi")}
         />
-      </svg>
+      </div>
     </div>
   );
 }
 
+const HANDLE_SIZE = 12;
+
 function Handle({
   xPct,
-  y,
   color,
   onPointerDown,
 }: {
   xPct: number;
-  y: number;
   color: string;
-  onPointerDown: (e: React.PointerEvent<SVGElement>) => void;
+  onPointerDown: (e: React.PointerEvent<HTMLDivElement>) => void;
 }) {
   return (
-    <g transform={`translate(${xPct} ${y})`}>
-      {/* Larger invisible hit target, smaller visible knob. */}
-      <circle
-        r={HANDLE_HIT_RADIUS}
-        fill="transparent"
-        style={{ cursor: "ew-resize" }}
-        onPointerDown={onPointerDown}
-      />
-      <circle r={HANDLE_RADIUS} fill="white" stroke={color} strokeWidth={1.5} />
-    </g>
+    <div
+      data-handle="true"
+      onPointerDown={onPointerDown}
+      style={{
+        position: "absolute",
+        top: "50%",
+        left: `${xPct}%`,
+        width: HANDLE_SIZE,
+        height: HANDLE_SIZE,
+        borderRadius: "50%",
+        background: "white",
+        border: `1.5px solid ${color}`,
+        transform: "translate(-50%, -50%)",
+        cursor: "ew-resize",
+        boxSizing: "border-box",
+        boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
+      }}
+    />
   );
 }

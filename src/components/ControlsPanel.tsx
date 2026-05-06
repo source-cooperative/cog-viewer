@@ -157,6 +157,35 @@ function RescaleRow({
   );
 }
 
+const PRESET_EPSILON = 1e-6;
+const rangesMatch = (a: [number, number], b: [number, number]) =>
+  Math.abs(a[0] - b[0]) < PRESET_EPSILON &&
+  Math.abs(a[1] - b[1]) < PRESET_EPSILON;
+
+type Preset = "percentile" | "minmax" | "custom";
+
+/** Detect whether the current rescale state matches the 2-98% preset, the
+ * Min/Max preset, or neither (custom). When state.rescale is null the app
+ * is rendering at the displayed default (2-98%), so that's the active preset. */
+function activePreset(
+  current: ([number, number] | null)[],
+  percentile: ([number, number] | null)[],
+  minMax: ([number, number] | null)[],
+  isAuto: boolean,
+): Preset {
+  if (isAuto) return "percentile";
+  // Compare per-channel; all channels must match the same preset.
+  const matchesPreset = (preset: ([number, number] | null)[]) =>
+    current.every((c, i) => {
+      const p = preset[i];
+      if (!c || !p) return false;
+      return rangesMatch(c, p);
+    });
+  if (matchesPreset(percentile)) return "percentile";
+  if (matchesPreset(minMax)) return "minmax";
+  return "custom";
+}
+
 type RescaleSectionProps = {
   mode: Mode;
   bands: number[];
@@ -166,8 +195,10 @@ type RescaleSectionProps = {
 };
 
 /** Histogram-driven rescale UI. Displays one scrubber per channel in RGB,
- * one in single-band. Includes preset buttons (2–98%, Min/Max) plus a
- * Reset-to-auto fallback when the user has set an explicit override. */
+ * one in single-band. The 2–98% percentile and Min/Max presets are
+ * toggleable indicators — clicking the active preset is a no-op; clicking
+ * the inactive one switches. Clicking 2–98% drops the URL override (so
+ * shared links stay clean for the common default). */
 function RescaleSection({
   mode,
   bands,
@@ -179,16 +210,24 @@ function RescaleSection({
 
   if (mode === "single") {
     const stats = statsForBand(autoStats, bands[0] ?? 1);
-    const auto = stats ? defaultPercentileRange(stats) : null;
+    const percentile = stats ? defaultPercentileRange(stats) : null;
+    const minMax: [number, number] | null = stats
+      ? [stats.min, stats.max]
+      : null;
     const value: [number, number] =
-      state.rescale?.[0] ?? auto ?? [0, 1];
+      state.rescale?.[0] ?? percentile ?? [0, 1];
+
+    const preset = activePreset(
+      [state.rescale?.[0] ?? null],
+      [percentile],
+      [minMax],
+      isAuto,
+    );
 
     const setValue = (next: [number, number]) => update({ rescale: [next] });
 
     return (
-      <Field
-        label={isAuto && stats ? "Rescale (2–98%) — auto" : "Rescale"}
-      >
+      <Field label="Rescale">
         <RescaleRow
           stats={stats}
           value={value}
@@ -198,26 +237,24 @@ function RescaleSection({
         />
         <PresetRow
           show={Boolean(stats)}
-          isAuto={isAuto}
-          onMinMax={() =>
-            stats && setValue([stats.min, stats.max])
-          }
-          onPercentile={() =>
-            auto && update({ rescale: [auto] })
-          }
-          onReset={() => update({ rescale: null })}
+          active={preset}
+          onPercentile={() => update({ rescale: null })}
+          onMinMax={() => minMax && setValue(minMax)}
         />
       </Field>
     );
   }
 
-  // RGB mode — three channels. Honor existing per-channel state if present;
+  // RGB — three channels. Honor existing per-channel state if present;
   // else fall back to per-band auto percentiles.
   const perBandStats: (BandStats | null)[] = bands
     .slice(0, 3)
     .map((b) => statsForBand(autoStats, b));
-  const perBandAuto: ([number, number] | null)[] = perBandStats.map((s) =>
-    s ? defaultPercentileRange(s) : null,
+  const perBandPercentile: ([number, number] | null)[] = perBandStats.map(
+    (s) => (s ? defaultPercentileRange(s) : null),
+  );
+  const perBandMinMax: ([number, number] | null)[] = perBandStats.map((s) =>
+    s ? [s.min, s.max] : null,
   );
   const fromState =
     state.rescale && state.rescale.length >= 3
@@ -225,8 +262,18 @@ function RescaleSection({
       : null;
   const values: [number, number][] = [0, 1, 2].map((i) => {
     if (fromState) return fromState[i] ?? [0, 1];
-    return perBandAuto[i] ?? [0, 1];
+    return perBandPercentile[i] ?? [0, 1];
   });
+
+  const currentPerChannel: ([number, number] | null)[] = fromState
+    ? fromState
+    : [null, null, null];
+  const preset = activePreset(
+    currentPerChannel,
+    perBandPercentile,
+    perBandMinMax,
+    isAuto,
+  );
 
   const setChannel = (i: number, next: [number, number]) => {
     const out = values.map((v) => [...v] as [number, number]);
@@ -235,13 +282,7 @@ function RescaleSection({
   };
 
   return (
-    <Field
-      label={
-        isAuto && perBandStats.some((s) => s !== null)
-          ? "Rescale (2–98%) — auto"
-          : "Rescale"
-      }
-    >
+    <Field label="Rescale">
       <div style={{ display: "grid", gap: 8 }}>
         {(["R", "G", "B"] as const).map((label, i) => (
           <RescaleRow
@@ -257,22 +298,15 @@ function RescaleSection({
       </div>
       <PresetRow
         show={perBandStats.some((s) => s !== null)}
-        isAuto={isAuto}
+        active={preset}
+        onPercentile={() => update({ rescale: null })}
         onMinMax={() =>
           update({
-            rescale: perBandStats.map<[number, number]>((s, i) =>
-              s ? [s.min, s.max] : values[i],
+            rescale: perBandMinMax.map<[number, number]>(
+              (m, i) => m ?? values[i],
             ),
           })
         }
-        onPercentile={() =>
-          update({
-            rescale: perBandAuto.map<[number, number]>(
-              (r, i) => r ?? values[i],
-            ),
-          })
-        }
-        onReset={() => update({ rescale: null })}
       />
     </Field>
   );
@@ -280,44 +314,51 @@ function RescaleSection({
 
 function PresetRow({
   show,
-  isAuto,
+  active,
   onMinMax,
   onPercentile,
-  onReset,
 }: {
   show: boolean;
-  isAuto: boolean;
+  active: Preset;
   onMinMax: () => void;
   onPercentile: () => void;
-  onReset: () => void;
 }) {
   if (!show) return null;
   return (
     <div style={{ display: "flex", gap: 6, marginTop: 4, flexWrap: "wrap" }}>
-      <button
-        type="button"
+      <PresetButton
+        label="2–98%"
+        active={active === "percentile"}
         onClick={onPercentile}
-        style={{ padding: "2px 8px", fontSize: 11 }}
-      >
-        2–98%
-      </button>
-      <button
-        type="button"
+      />
+      <PresetButton
+        label="Min/Max"
+        active={active === "minmax"}
         onClick={onMinMax}
-        style={{ padding: "2px 8px", fontSize: 11 }}
-      >
-        Min/Max
-      </button>
-      {!isAuto && (
-        <button
-          type="button"
-          onClick={onReset}
-          style={{ padding: "2px 8px", fontSize: 11 }}
-        >
-          Reset to auto
-        </button>
-      )}
+      />
     </div>
+  );
+}
+
+function PresetButton({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={active ? "primary" : undefined}
+      style={{ padding: "2px 8px", fontSize: 11 }}
+    >
+      {label}
+    </button>
   );
 }
 
