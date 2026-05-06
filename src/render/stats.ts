@@ -1,5 +1,5 @@
 import { TiffTag } from "@cogeotiff/core";
-import type { GeoTIFF } from "@developmentseed/geotiff";
+import type { GeoTIFF, Overview } from "@developmentseed/geotiff";
 
 /** Read SamplesPerPixel from the COG's primary IFD tags. */
 export function readBandCount(tiff: GeoTIFF): number | null {
@@ -133,16 +133,21 @@ function fromGdalMetadata(tiff: GeoTIFF): AutoStats {
   return { perBand, global: averageStats([...perBand.values()]) };
 }
 
-/** Sample the coarsest overview's (0,0) tile to compute per-band min/max
- * and a 128-bin histogram per band. */
-async function fromCoarsestOverview(
+/** Sample one tile to compute per-band min/max and a 128-bin histogram per
+ * band. Prefers the coarsest overview (smallest = fastest = most
+ * representative), falling back to the primary image when the COG has no
+ * overview pyramid (e.g. a single-tile COG slice from a pre-sliced
+ * pyramid like EOxCloudless's `/z/x/y.tif` outputs). The primary's (0,0)
+ * tile is one corner of the image, so stats from that fallback are biased
+ * — but better than no histogram. */
+async function fromSampledTile(
   tiff: GeoTIFF,
   signal: AbortSignal,
 ): Promise<AutoStats> {
   const ovs = tiff.overviews;
-  if (ovs.length === 0) return NULL_STATS;
-  const coarsest = ovs[ovs.length - 1];
-  const tile = await coarsest.fetchTile(0, 0, { signal, boundless: false });
+  const source: GeoTIFF | Overview =
+    ovs.length > 0 ? ovs[ovs.length - 1] : tiff;
+  const tile = await source.fetchTile(0, 0, { signal, boundless: false });
   if (signal.aborted) return NULL_STATS;
   const arr = tile.array;
   const perBand = new Map<number, BandStats>();
@@ -185,16 +190,17 @@ async function fromCoarsestOverview(
   return { perBand, global: averageStats([...perBand.values()]) };
 }
 
-/** Compute auto-stats for a GeoTIFF: try GDAL_METADATA for min/max first
- * (cheap), then always sample the coarsest overview to fill in histograms.
- * The histogram pass is a single iteration over a single tile, so doing it
- * unconditionally is fine. Caller guards against stale results. */
+/** Compute auto-stats for a GeoTIFF: sample one tile (coarsest overview if
+ * available, else primary image) for the histogram, falling back to
+ * GDAL_METADATA min/max as a last resort. The histogram pass is a single
+ * iteration over a single tile, so doing it unconditionally is fine.
+ * Caller guards against stale results. */
 export async function computeAutoStats(
   tiff: GeoTIFF,
   signal: AbortSignal,
 ): Promise<AutoStats> {
-  const sampled = await fromCoarsestOverview(tiff, signal);
+  const sampled = await fromSampledTile(tiff, signal);
   if (sampled.perBand) return sampled;
-  // Fallback: GDAL stats without histograms when there's no overview pyramid.
+  // Last-resort fallback: GDAL stats without histograms.
   return fromGdalMetadata(tiff);
 }
