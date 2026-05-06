@@ -4,6 +4,29 @@ import { SourceHttp } from "@chunkd/source-http";
 import { GeoTIFF } from "@developmentseed/geotiff";
 
 /**
+ * COG access pattern is hundreds of distinct Range requests against the
+ * same URL. Chrome's HTTP cache serializes lookups on a single I/O thread
+ * and evaluates `If-Range`/`If-None-Match` validators per request, which
+ * shows up as multi-hundred-millisecond "Stalled" time per chunk in the
+ * Network panel — frequently *longer* than the actual network round-trip.
+ *
+ * `cache: "no-store"` skips both reads and writes against that machinery.
+ * We don't lose anything: the @chunkd `SourceCache` middleware caches
+ * header chunks in memory, deck.gl's tile cache holds decoded tile data
+ * in JS heap, so the browser's disk cache was only ever helping on full
+ * page reloads — and even then, partial-content (206) responses cache
+ * poorly against subsequent Range requests for *different* byte ranges
+ * of the same URL.
+ *
+ * `SourceHttp.fetch` is the upstream's documented override hook for
+ * customising the fetcher; defaults to `(a, b) => fetch(a, b)`. Setting
+ * it once at module load applies to every SourceHttp / CorsSafeSourceHttp
+ * instance.
+ */
+SourceHttp.fetch = (url, opts) =>
+  fetch(url as URL | string, { ...opts, cache: "no-store" });
+
+/**
  * SourceHttp variant that resists the bogus `metadata.size` value the upstream
  * class records when the HTTP server returns 206 Partial Content but doesn't
  * expose `Content-Range` via CORS.
