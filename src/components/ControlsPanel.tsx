@@ -121,7 +121,7 @@ export function ControlsPanel({
         right: 16,
         width: 280,
         maxWidth: "calc(100vw - 32px)",
-        padding: open ? 14 : "8px 12px",
+        padding: "8px 12px",
         zIndex: 5,
         display: "grid",
         gap: open ? 12 : 0,
