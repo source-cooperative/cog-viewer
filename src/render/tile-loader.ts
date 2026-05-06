@@ -25,6 +25,16 @@ export type MultiBandTileData = {
   height: number;
   byteLength: number;
   nodata: number | null;
+  /**
+   * Divisor that maps source-space sample values to the value the GPU
+   * fragment shader actually reads for this tile's textures. For
+   * `r8unorm` the GPU normalizes uint8 0..255 into 0..1, so source-unit
+   * comparisons and rescale ranges (e.g. nodata=255, rescale=[0,255])
+   * must be divided by 255 before being passed to a shader uniform.
+   * For float formats (`r16float`, `r32float`) the value is uploaded as
+   * a float and not normalized, so the divisor is 1.
+   */
+  sampleScale: number;
 };
 
 /**
@@ -59,6 +69,12 @@ function singleBandFormat(data: RasterTypedArray): TextureFormat {
     return "r32float";
   }
   return "r8unorm";
+}
+
+/** Divisor that converts source-unit sample values into the value the GPU
+ * shader reads after sampling. See `MultiBandTileData.sampleScale`. */
+function sampleScaleForFormat(format: TextureFormat): number {
+  return format === "r8unorm" ? 255 : 1;
 }
 
 /** WebGPU/luma can't upload integer typed arrays into float texture formats;
@@ -115,6 +131,7 @@ export function makeMultiBandTileLoader(bandIndexes: number[]) {
       { texture: Texture; uvTransform: UvTransform }
     >();
     let totalBytes = 0;
+    let sampleScale = 1;
     for (const idx of bandIndexes) {
       const i = idx - 1;
       if (i < 0 || i >= array.count) continue;
@@ -124,6 +141,7 @@ export function makeMultiBandTileLoader(bandIndexes: number[]) {
           : extractBand(array.data as RasterTypedArray, i, array.count);
       const format = singleBandFormat(bandData);
       const data = coerceForFormat(bandData, format);
+      sampleScale = sampleScaleForFormat(format);
       const texture = device.createTexture({
         data,
         format,
@@ -143,6 +161,7 @@ export function makeMultiBandTileLoader(bandIndexes: number[]) {
       height: array.height,
       byteLength: totalBytes,
       nodata: array.nodata,
+      sampleScale,
     };
     if (tileFinalizer && bands.size > 0) {
       tileFinalizer.register(

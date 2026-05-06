@@ -218,6 +218,8 @@ export default function App() {
     state.rescale,
     state.nodata,
     state.colormap,
+    state.gamma,
+    state.sigmoidal,
     colormapTexture,
   ]);
 

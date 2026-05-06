@@ -84,6 +84,22 @@ describe("parseCogState", () => {
       "closed",
     );
   });
+
+  it("parses gamma; defaults to 1; rejects non-positive / NaN", () => {
+    expect(parseCogState(new URLSearchParams()).gamma).toBe(1);
+    expect(parseCogState(new URLSearchParams("gamma=2.2")).gamma).toBe(2.2);
+    expect(parseCogState(new URLSearchParams("gamma=0")).gamma).toBe(1);
+    expect(parseCogState(new URLSearchParams("gamma=-1")).gamma).toBe(1);
+    expect(parseCogState(new URLSearchParams("gamma=abc")).gamma).toBe(1);
+  });
+
+  it("parses sigmoidal as 'contrast,bias'; rejects malformed", () => {
+    expect(parseCogState(new URLSearchParams("sigmoidal=10,0.5")).sigmoidal)
+      .toEqual({ contrast: 10, bias: 0.5 });
+    expect(parseCogState(new URLSearchParams("sigmoidal=10")).sigmoidal).toBeNull();
+    expect(parseCogState(new URLSearchParams("sigmoidal=foo,bar")).sigmoidal).toBeNull();
+    expect(parseCogState(new URLSearchParams()).sigmoidal).toBeNull();
+  });
 });
 
 describe("serializeCogState", () => {
@@ -108,6 +124,8 @@ describe("serializeCogState", () => {
       colorspace: null,
       basemap: "auto",
       panel: "closed",
+      gamma: 1,
+      sigmoidal: null,
     });
     expect(out.toString()).toBe("url=https%3A%2F%2Fx.tif");
   });
@@ -124,6 +142,8 @@ describe("serializeCogState", () => {
       colorspace: null,
       basemap: "auto",
       panel: "closed",
+      gamma: 1,
+      sigmoidal: null,
     });
     expect(out.toString()).toBe("");
   });

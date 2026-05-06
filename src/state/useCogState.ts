@@ -5,6 +5,7 @@ import type {
   CogStateUpdate,
   Mode,
   PanelState,
+  Sigmoidal,
 } from "./types";
 
 const VALID_MODES: Mode[] = ["rgb", "single"];
@@ -50,6 +51,23 @@ const parseOpacity = (raw: string | null): number => {
   return Math.min(1, Math.max(0, n));
 };
 
+const parseGamma = (raw: string | null): number => {
+  if (raw === null || raw === "") return 1;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return 1;
+  return n;
+};
+
+const parseSigmoidal = (raw: string | null): Sigmoidal | null => {
+  if (!raw) return null;
+  const parts = raw.split(",");
+  if (parts.length !== 2) return null;
+  const contrast = Number(parts[0]);
+  const bias = Number(parts[1]);
+  if (!Number.isFinite(contrast) || !Number.isFinite(bias)) return null;
+  return { contrast, bias };
+};
+
 export function parseCogState(p: URLSearchParams): CogState {
   const modeRaw = p.get("mode");
   const basemapRaw = p.get("basemap");
@@ -68,6 +86,8 @@ export function parseCogState(p: URLSearchParams): CogState {
     panel: VALID_PANEL.includes(p.get("panel") as PanelState)
       ? (p.get("panel") as PanelState)
       : "closed",
+    gamma: parseGamma(p.get("gamma")),
+    sigmoidal: parseSigmoidal(p.get("sigmoidal")),
   };
 }
 
@@ -83,6 +103,8 @@ export function serializeCogState(s: CogState): URLSearchParams {
   if (s.colorspace) p.set("colorspace", s.colorspace);
   if (s.basemap !== "auto") p.set("basemap", s.basemap);
   if (s.panel !== "closed") p.set("panel", s.panel);
+  if (s.gamma !== 1) p.set("gamma", String(s.gamma));
+  if (s.sigmoidal) p.set("sigmoidal", `${s.sigmoidal.contrast},${s.sigmoidal.bias}`);
   return p;
 }
 

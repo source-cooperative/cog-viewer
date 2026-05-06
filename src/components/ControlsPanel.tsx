@@ -46,6 +46,19 @@ function statsForBands(
   return [lo / ranges.length, hi / ranges.length];
 }
 
+/** Per-band [min, max] for the three currently-selected RGB bands. Falls
+ * back to the global auto for any band missing per-band stats. */
+function perBandStats(
+  autoStats: AutoStats | null,
+  bands: number[],
+): [number, number][] | null {
+  if (!autoStats?.perBand) return null;
+  const fallback = autoStats.global ?? [0, 1];
+  return bands.slice(0, 3).map(
+    (b) => autoStats.perBand?.get(b) ?? fallback,
+  );
+}
+
 function Field({
   label,
   children,
@@ -80,6 +93,17 @@ export function ControlsPanel({
   const auto = statsForBands(autoStats, effectiveBands);
   const effectiveRescale = state.rescale?.[0] ?? auto ?? [0, 1];
   const isAutoRescale = state.rescale === null;
+  // RGB per-band rescale: prefer the user's saved per-band pairs; otherwise
+  // pull from the auto-stats per-band map; otherwise broadcast the single auto.
+  const perBandAuto = perBandStats(autoStats, effectiveBands);
+  const perBandRescale: [number, number][] =
+    state.rescale && state.rescale.length >= 3
+      ? state.rescale.slice(0, 3)
+      : perBandAuto ?? [
+          effectiveRescale,
+          effectiveRescale,
+          effectiveRescale,
+        ];
   // CompositeBands has 4 slots; we always fetch the first up-to-4 bands so
   // users can freely swap among them. Bands beyond that aren't reachable
   // without a re-fetch, so we hide them from the picker.
@@ -216,46 +240,94 @@ export function ControlsPanel({
 
               <Field
                 label={
-                  isAutoRescale && auto
+                  isAutoRescale && (effectiveMode === "rgb" ? perBandAuto : auto)
                     ? "Rescale (min, max) — auto"
                     : "Rescale (min, max)"
                 }
               >
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
-                    gap: 6,
-                  }}
-                >
-                  <input
-                    aria-label="rescale-min"
-                    type="number"
-                    step="any"
-                    value={effectiveRescale[0]}
-                    onChange={(e) =>
-                      update({
-                        rescale: [
-                          [Number(e.target.value), effectiveRescale[1]],
-                        ],
-                      })
-                    }
-                  />
-                  <input
-                    aria-label="rescale-max"
-                    type="number"
-                    step="any"
-                    value={effectiveRescale[1]}
-                    onChange={(e) =>
-                      update({
-                        rescale: [
-                          [effectiveRescale[0], Number(e.target.value)],
-                        ],
-                      })
-                    }
-                  />
-                </div>
-                {!isAutoRescale && auto && (
+                {effectiveMode === "rgb" ? (
+                  <div style={{ display: "grid", gap: 4 }}>
+                    {(["R", "G", "B"] as const).map((label, i) => (
+                      <div
+                        key={label}
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "16px minmax(0, 1fr) minmax(0, 1fr)",
+                          gap: 6,
+                          alignItems: "center",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: 11,
+                            color: "var(--text-muted)",
+                            textAlign: "center",
+                          }}
+                        >
+                          {label}
+                        </span>
+                        <input
+                          aria-label={`rescale-min-${label.toLowerCase()}`}
+                          type="number"
+                          step="any"
+                          value={perBandRescale[i][0]}
+                          onChange={(e) => {
+                            const next = perBandRescale.map((r) => [...r] as [number, number]);
+                            next[i] = [Number(e.target.value), perBandRescale[i][1]];
+                            update({ rescale: next });
+                          }}
+                        />
+                        <input
+                          aria-label={`rescale-max-${label.toLowerCase()}`}
+                          type="number"
+                          step="any"
+                          value={perBandRescale[i][1]}
+                          onChange={(e) => {
+                            const next = perBandRescale.map((r) => [...r] as [number, number]);
+                            next[i] = [perBandRescale[i][0], Number(e.target.value)];
+                            update({ rescale: next });
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
+                      gap: 6,
+                    }}
+                  >
+                    <input
+                      aria-label="rescale-min"
+                      type="number"
+                      step="any"
+                      value={effectiveRescale[0]}
+                      onChange={(e) =>
+                        update({
+                          rescale: [
+                            [Number(e.target.value), effectiveRescale[1]],
+                          ],
+                        })
+                      }
+                    />
+                    <input
+                      aria-label="rescale-max"
+                      type="number"
+                      step="any"
+                      value={effectiveRescale[1]}
+                      onChange={(e) =>
+                        update({
+                          rescale: [
+                            [effectiveRescale[0], Number(e.target.value)],
+                          ],
+                        })
+                      }
+                    />
+                  </div>
+                )}
+                {!isAutoRescale && (effectiveMode === "rgb" ? perBandAuto : auto) && (
                   <button
                     type="button"
                     onClick={() => update({ rescale: null })}
@@ -327,6 +399,100 @@ export function ControlsPanel({
                         update({ nodata: Number(e.target.value) })
                       }
                     />
+                  )}
+                </div>
+              </Field>
+
+              <Field label={`Gamma (${state.gamma.toFixed(2)})`}>
+                <input
+                  aria-label="gamma"
+                  type="range"
+                  min={0.1}
+                  max={3}
+                  step={0.05}
+                  value={state.gamma}
+                  onChange={(e) =>
+                    update({ gamma: Number(e.target.value) })
+                  }
+                  onDoubleClick={() => update({ gamma: 1 })}
+                />
+              </Field>
+
+              <Field label="Sigmoidal contrast">
+                <div style={{ display: "grid", gap: 6 }}>
+                  <label
+                    style={{
+                      display: "flex",
+                      gap: 6,
+                      alignItems: "center",
+                      fontSize: 12,
+                    }}
+                  >
+                    <input
+                      aria-label="sigmoidal-enabled"
+                      type="checkbox"
+                      checked={state.sigmoidal !== null}
+                      onChange={(e) =>
+                        update({
+                          sigmoidal: e.target.checked
+                            ? { contrast: 5, bias: 0.5 }
+                            : null,
+                        })
+                      }
+                    />
+                    Enabled
+                  </label>
+                  {state.sigmoidal && (
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
+                        gap: 6,
+                      }}
+                    >
+                      <label style={{ display: "grid", gap: 2, fontSize: 11 }}>
+                        <span style={{ color: "var(--text-muted)" }}>
+                          Contrast ({state.sigmoidal.contrast.toFixed(1)})
+                        </span>
+                        <input
+                          aria-label="sigmoidal-contrast"
+                          type="range"
+                          min={0.5}
+                          max={20}
+                          step={0.5}
+                          value={state.sigmoidal.contrast}
+                          onChange={(e) =>
+                            update({
+                              sigmoidal: state.sigmoidal && {
+                                ...state.sigmoidal,
+                                contrast: Number(e.target.value),
+                              },
+                            })
+                          }
+                        />
+                      </label>
+                      <label style={{ display: "grid", gap: 2, fontSize: 11 }}>
+                        <span style={{ color: "var(--text-muted)" }}>
+                          Bias ({state.sigmoidal.bias.toFixed(2)})
+                        </span>
+                        <input
+                          aria-label="sigmoidal-bias"
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.05}
+                          value={state.sigmoidal.bias}
+                          onChange={(e) =>
+                            update({
+                              sigmoidal: state.sigmoidal && {
+                                ...state.sigmoidal,
+                                bias: Number(e.target.value),
+                              },
+                            })
+                          }
+                        />
+                      </label>
+                    </div>
                   )}
                 </div>
               </Field>

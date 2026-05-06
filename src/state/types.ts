@@ -4,6 +4,8 @@ export type Basemap = "auto" | "light" | "dark" | "satellite" | "off";
 
 export type PanelState = "open" | "closed";
 
+export type Sigmoidal = { contrast: number; bias: number };
+
 export type CogState = {
   url: string | null;
   mode: Mode | null;
@@ -15,8 +17,13 @@ export type CogState = {
   colorspace: string | null;
   basemap: Basemap;
   panel: PanelState;
+  /** Power-law gamma correction (1.0 = off). */
+  gamma: number;
+  /** Sigmoidal contrast (rio-color formula). null = off. */
+  sigmoidal: Sigmoidal | null;
 };
 
-export type CogStateUpdate = Partial<Omit<CogState, "opacity">> & {
+export type CogStateUpdate = Partial<Omit<CogState, "opacity" | "gamma">> & {
   opacity?: number;
+  gamma?: number;
 };
