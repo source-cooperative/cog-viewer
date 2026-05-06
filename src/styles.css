@@ -165,7 +165,7 @@ a {
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--text-muted);
+  color: var(--text);
 }
 
 details.section > summary {
