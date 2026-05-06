@@ -1,4 +1,3 @@
-import type { Affine } from "@developmentseed/affine";
 import type { GetTileDataOptions } from "@developmentseed/deck.gl-geotiff";
 import type {
   GeoTIFF,
@@ -22,11 +21,6 @@ export type MultiBandTileData = {
   /** One r-channel texture per fetched band, keyed by 1-based band index
    * as a string so it can flow into `buildCompositeBandsProps`. */
   bands: Map<string, { texture: Texture; uvTransform: UvTransform }>;
-  /** Pre-coercion CPU-side band arrays, keyed by 1-based band index as a
-   * string. Retained alongside the GPU textures so the hover inspector
-   * can read raw sample values without a re-fetch. Pre-coercion keeps the
-   * smallest representation (u8/u16) and matches the COG's native dtype. */
-  cpuBands: Map<string, RasterTypedArray>;
   width: number;
   height: number;
   byteLength: number;
@@ -41,13 +35,6 @@ export type MultiBandTileData = {
    * a float and not normalized, so the divisor is 1.
    */
   sampleScale: number;
-  /**
-   * Affine geotransform from this tile's pixel coordinates (col, row) to
-   * the COG's native CRS coordinates (x, y). Lets the inspector compute
-   * the exact pixel for a click — invert this affine and multiply by the
-   * click point projected into the COG's CRS.
-   */
-  transform: Affine;
 };
 
 /**
@@ -142,7 +129,6 @@ export function makeMultiBandTileLoader(bandIndexes: number[]) {
       string,
       { texture: Texture; uvTransform: UvTransform }
     >();
-    const cpuBands = new Map<string, RasterTypedArray>();
     let totalBytes = 0;
     let sampleScale = 1;
     for (const idx of bandIndexes) {
@@ -162,26 +148,18 @@ export function makeMultiBandTileLoader(bandIndexes: number[]) {
         height: array.height,
       });
       bands.set(String(idx), { texture, uvTransform: IDENTITY_UV });
-      cpuBands.set(String(idx), bandData);
       // Use the *post-coercion* per-element byte size so deck.gl's tile
       // cache budget reflects the actual buffer allocated. coerceForFormat
-      // upcasts int16/uint16 to Float32 (4 bytes), which the older
-      // bytesPerPixelSingle table reported as 2 bytes — under-counting.
+      // upcasts int16/uint16 to Float32 (4 bytes).
       totalBytes += array.width * array.height * data.BYTES_PER_ELEMENT;
-      // Account for the CPU copy too. For band-separate layout `bandData`
-      // is a reference into the original array (shared), but the byte
-      // budget is still a useful upper bound for cache eviction.
-      totalBytes += bandData.byteLength;
     }
     const result: MultiBandTileData = {
       bands,
-      cpuBands,
       width: array.width,
       height: array.height,
       byteLength: totalBytes,
       nodata: array.nodata,
       sampleScale,
-      transform: array.transform,
     };
     if (tileFinalizer && bands.size > 0) {
       tileFinalizer.register(

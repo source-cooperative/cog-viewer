@@ -14,15 +14,9 @@ import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
 import { isDarkChrome, resolveBasemap } from "./basemaps";
 import { loadGeoTIFF } from "./cog/load-geotiff";
-import {
-  crsToTilePixel,
-  makeLngLatToCogCrs,
-  type LngLatToCrs,
-} from "./cog/projection";
 import { ControlsPanel } from "./components/ControlsPanel";
 import { EmptyState } from "./components/EmptyState";
 import { FullscreenButton } from "./components/FullscreenButton";
-import { Inspector, type InspectorState } from "./components/Inspector";
 import { Toast, humanizeError } from "./components/Toast";
 import {
   buildRgbCompositeRenderTile,
@@ -37,7 +31,6 @@ import {
 import {
   makeMultiBandTileLoader,
   MAX_BAND_SLOTS,
-  type MultiBandTileData,
 } from "./render/tile-loader";
 import { useCogState } from "./state/useCogState";
 
@@ -85,15 +78,11 @@ export default function App() {
   const [autoStats, setAutoStats] = useState<AutoStats | null>(null);
   const [bandCount, setBandCount] = useState<number | null>(null);
   const [bandNames, setBandNames] = useState<Map<number, string> | null>(null);
-  const [lngLatToCrs, setLngLatToCrs] = useState<LngLatToCrs | null>(null);
   const [error, setError] = useState<string | null>(null);
   // First symbol (label) layer id in the active basemap style. Used as
   // beforeId so the COG draws under labels when state.labelsAbove is true.
   // Undefined when the basemap has no labels (satellite / off).
   const [firstSymbolId, setFirstSymbolId] = useState<string | undefined>();
-  // Most recent click-to-inspect reading. Persists until the user dismisses
-  // the inspector or clicks a different pixel.
-  const [pin, setPin] = useState<InspectorState | null>(null);
   // Tracks which URL the auto-mode effect has already fired for. Prevents a
   // late-arriving bandCount from clobbering an explicit user mode pick made
   // between the URL change and metadata load.
@@ -119,7 +108,6 @@ export default function App() {
     setAutoStats(null);
     setBandCount(null);
     setBandNames(null);
-    setLngLatToCrs(null);
     setError(null);
     const url = state.url;
     if (!url) return;
@@ -214,67 +202,7 @@ export default function App() {
       opacity: state.opacity,
       getTileData,
       renderTile,
-      pickable: true,
       beforeId: state.labelsAbove ? firstSymbolId : undefined,
-      onClick: (info: {
-        x: number;
-        y: number;
-        coordinate?: number[];
-        tile?: {
-          content?: MultiBandTileData | null;
-          bbox?: { west: number; north: number; east: number; south: number }
-            | { left: number; top: number; right: number; bottom: number };
-        };
-      }) => {
-        const tile = info.tile;
-        const data = tile?.content;
-        const bbox = tile?.bbox;
-        const coord = info.coordinate;
-        // bbox may be NonGeoBoundingBox; we only support the geographic case
-        // (the COG layer feeds lng/lat through projectTo4326 for tile lookups).
-        if (!data || !bbox || !coord || !("west" in bbox)) return;
-        const [lng, lat] = coord;
-        // Compute the exact pixel using the COG's native affine transform.
-        // For non-4326 COGs the previous linear UV-from-WGS84-bbox mapping
-        // landed on the wrong pixel because the deck.gl tile bbox is the
-        // reprojected boundary of a tile that's rectangular in the COG's
-        // CRS, not in lat/lng. Project the click into the COG's CRS first,
-        // then invert the tile's affine to get tile-local (col, row).
-        let px0: number;
-        let py0: number;
-        if (lngLatToCrs) {
-          const [crsX, crsY] = lngLatToCrs(lng, lat);
-          const [col, row] = crsToTilePixel(data.transform, crsX, crsY);
-          px0 = Math.round(col);
-          py0 = Math.round(row);
-        } else {
-          // Fallback: linear UV from WGS84 bbox. Used when the COG's CRS
-          // can't be resolved (no EPSG registered with proj4).
-          const u = (lng - bbox.west) / (bbox.east - bbox.west);
-          const v = (bbox.north - lat) / (bbox.north - bbox.south);
-          if (u < 0 || u > 1 || v < 0 || v > 1) return;
-          px0 = Math.floor(u * data.width);
-          py0 = Math.floor(v * data.height);
-        }
-        if (px0 < 0 || px0 >= data.width || py0 < 0 || py0 >= data.height) return;
-
-        const offset = py0 * data.width + px0;
-        const samples = Array.from(data.cpuBands.entries())
-          .map(([key, arr]) => {
-            const band = Number(key);
-            const value = arr[offset] as number;
-            return {
-              band,
-              name: bandNames?.get(band) ?? null,
-              value,
-              isNodata:
-                data.nodata !== null && Number.isFinite(value) &&
-                value === data.nodata,
-            };
-          })
-          .sort((a, b) => a.band - b.band);
-        setPin({ x: info.x, y: info.y, lng, lat, samples });
-      },
       onGeoTIFFLoad: (
         tiff: GeoTIFF,
         options: {
@@ -283,7 +211,6 @@ export default function App() {
       ) => {
         setBandCount(readBandCount(tiff));
         setBandNames(readBandNames(tiff));
-        setLngLatToCrs(() => makeLngLatToCogCrs(tiff));
         const { west, south, east, north } = options.geographicBounds;
         mapRef.current?.fitBounds(
           [
@@ -309,7 +236,6 @@ export default function App() {
     colormapTexture,
     bandNames,
     autoStats,
-    lngLatToCrs,
   ]);
 
   // Apply the dark theme to <html> so portal-rendered children
@@ -348,8 +274,6 @@ export default function App() {
         bandNames={bandNames}
         autoStats={autoStats}
       />
-
-      <Inspector pin={pin} onClose={() => setPin(null)} />
 
       <Toast message={error} onDismiss={() => setError(null)} />
 
