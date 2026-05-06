@@ -121,28 +121,49 @@ export function Tooltip({ text, children }: Props) {
   );
 }
 
-/** Small "?" badge with a tooltip — used to annotate field labels. */
+/** Small "?" badge with a tooltip — used to annotate field labels.
+ *
+ * Drawn as SVG so the glyph centers reliably regardless of font metrics.
+ * Flex-centering a "?" character in a span leaves it visually offset
+ * because IBM Plex Sans (and most fonts) place the character above the
+ * em-box midline. */
 export function InfoIcon({ text }: { text: string }) {
   return (
     <Tooltip text={text}>
-      <span
+      <svg
+        role="img"
         aria-label={text}
+        width="12"
+        height="12"
+        viewBox="0 0 12 12"
         style={{
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: 12,
-          height: 12,
-          borderRadius: "50%",
-          border: "1px solid currentColor",
-          fontSize: 9,
-          fontWeight: 700,
+          flex: "0 0 auto",
           cursor: "help",
           opacity: 0.55,
+          color: "currentColor",
         }}
       >
-        ?
-      </span>
+        <circle
+          cx="6"
+          cy="6"
+          r="5"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1"
+        />
+        <text
+          x="6"
+          y="6"
+          textAnchor="middle"
+          dominantBaseline="central"
+          fontSize="8"
+          fontWeight="700"
+          fontFamily="var(--font-sans)"
+          fill="currentColor"
+        >
+          ?
+        </text>
+      </svg>
     </Tooltip>
   );
 }
