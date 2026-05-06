@@ -16,6 +16,7 @@ import { resolveBasemap } from "./basemaps";
 import { loadGeoTIFF } from "./cog/load-geotiff";
 import { ControlsPanel } from "./components/ControlsPanel";
 import { EmptyState } from "./components/EmptyState";
+import { Toast, humanizeError } from "./components/Toast";
 import {
   buildRgbCompositeRenderTile,
   buildSingleCompositeRenderTile,
@@ -66,6 +67,7 @@ export default function App() {
   const [autoStats, setAutoStats] = useState<AutoStats | null>(null);
   const [bandCount, setBandCount] = useState<number | null>(null);
   const [bandNames, setBandNames] = useState<Map<number, string> | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   // Open the GeoTIFF ourselves through the CORS workaround in cog/load-geotiff.
   // Required (not just an optimization) because the geotiff library's
@@ -77,6 +79,7 @@ export default function App() {
     setAutoStats(null);
     setBandCount(null);
     setBandNames(null);
+    setError(null);
     const url = state.url;
     if (!url) return;
     let cancelled = false;
@@ -85,7 +88,10 @@ export default function App() {
         const tiff = await loadGeoTIFF(url);
         if (!cancelled) setGeotiff(tiff);
       } catch (err) {
-        if (!cancelled) console.error("loadGeoTIFF failed", err);
+        if (!cancelled) {
+          console.error("loadGeoTIFF failed", err);
+          setError(humanizeError(err));
+        }
       }
     })();
     return () => {
@@ -203,6 +209,8 @@ export default function App() {
         bandNames={bandNames}
         autoStats={autoStats}
       />
+
+      <Toast message={error} onDismiss={() => setError(null)} />
 
       {!state.url && <EmptyState onSubmit={(url) => update({ url })} />}
     </div>
