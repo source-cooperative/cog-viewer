@@ -32,10 +32,15 @@ export function BandHistogram({
 
   const range = stats.max - stats.min;
   const safeRange = range > 0 ? range : 1;
-  const maxBin = useMemo(
-    () => stats.histogram.reduce((a, b) => Math.max(a, b), 0) || 1,
-    [stats.histogram],
-  );
+  // Bar heights use log(1+count) so heavily skewed distributions (a single
+  // huge bin near zero plus a long thin tail) stay readable. log1p(0) = 0
+  // so empty bins still draw nothing; log1p(big) tames the spike without
+  // hiding it. For well-distributed data this is nearly imperceptible.
+  const logMaxBin = useMemo(() => {
+    let max = 0;
+    for (const c of stats.histogram) if (c > max) max = c;
+    return Math.log1p(max) || 1;
+  }, [stats.histogram]);
 
   const toFrac = (v: number) =>
     Math.max(0, Math.min(1, (v - stats.min) / safeRange));
@@ -146,7 +151,7 @@ export function BandHistogram({
 
           {stats.histogram.map((count, i) => {
             const w = 100 / stats.histogram.length;
-            const h = (count / maxBin) * (height - 4);
+            const h = (Math.log1p(count) / logMaxBin) * (height - 4);
             return (
               <rect
                 key={i}
