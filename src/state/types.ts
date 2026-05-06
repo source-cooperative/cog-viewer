@@ -21,9 +21,14 @@ export type CogState = {
   gamma: number;
   /** Sigmoidal contrast (rio-color formula). null = off. */
   sigmoidal: Sigmoidal | null;
+  /** Draw the COG below the basemap's label layers (default true). */
+  labelsAbove: boolean;
 };
 
-export type CogStateUpdate = Partial<Omit<CogState, "opacity" | "gamma">> & {
+export type CogStateUpdate = Partial<
+  Omit<CogState, "opacity" | "gamma" | "labelsAbove">
+> & {
   opacity?: number;
   gamma?: number;
+  labelsAbove?: boolean;
 };

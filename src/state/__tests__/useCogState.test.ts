@@ -100,6 +100,19 @@ describe("parseCogState", () => {
     expect(parseCogState(new URLSearchParams("sigmoidal=foo,bar")).sigmoidal).toBeNull();
     expect(parseCogState(new URLSearchParams()).sigmoidal).toBeNull();
   });
+
+  it("parses labelsAbove; defaults true; only 'below' flips it", () => {
+    expect(parseCogState(new URLSearchParams()).labelsAbove).toBe(true);
+    expect(parseCogState(new URLSearchParams("labels=below")).labelsAbove).toBe(
+      false,
+    );
+    expect(parseCogState(new URLSearchParams("labels=above")).labelsAbove).toBe(
+      true,
+    );
+    expect(parseCogState(new URLSearchParams("labels=bogus")).labelsAbove).toBe(
+      true,
+    );
+  });
 });
 
 describe("serializeCogState", () => {
@@ -126,6 +139,7 @@ describe("serializeCogState", () => {
       panel: "closed",
       gamma: 1,
       sigmoidal: null,
+      labelsAbove: true,
     });
     expect(out.toString()).toBe("url=https%3A%2F%2Fx.tif");
   });
@@ -144,8 +158,32 @@ describe("serializeCogState", () => {
       panel: "closed",
       gamma: 1,
       sigmoidal: null,
+      labelsAbove: true,
     });
     expect(out.toString()).toBe("");
+  });
+
+  it("emits labels=below only when labelsAbove is false", () => {
+    const base = {
+      url: null,
+      mode: null,
+      bands: null,
+      rescale: null,
+      colormap: null,
+      nodata: null,
+      opacity: 1,
+      colorspace: null,
+      basemap: "auto" as const,
+      panel: "closed" as const,
+      gamma: 1,
+      sigmoidal: null,
+    };
+    expect(
+      serializeCogState({ ...base, labelsAbove: true }).toString(),
+    ).toBe("");
+    expect(
+      serializeCogState({ ...base, labelsAbove: false }).toString(),
+    ).toBe("labels=below");
   });
 });
 

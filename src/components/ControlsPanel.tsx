@@ -124,7 +124,7 @@ export function ControlsPanel({
         padding: "8px 12px",
         zIndex: 5,
         display: "grid",
-        gap: open ? 12 : 0,
+        gap: 12,
         maxHeight: "calc(100vh - 32px)",
         overflowX: "hidden",
         overflowY: "auto",
@@ -143,7 +143,7 @@ export function ControlsPanel({
         }}
       >
         <span className="panel-header">Options</span>
-        <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+        <span style={{ fontSize: 24, color: "var(--text-muted)" }}>
           {open ? "▾" : "◂"}
         </span>
       </button>
@@ -164,6 +164,25 @@ export function ControlsPanel({
                 </option>
               ))}
             </select>
+            <label
+              style={{
+                display: "flex",
+                gap: 6,
+                alignItems: "center",
+                fontSize: 12,
+                marginTop: 4,
+              }}
+            >
+              <input
+                aria-label="labels-above"
+                type="checkbox"
+                checked={state.labelsAbove}
+                onChange={(e) =>
+                  update({ labelsAbove: e.target.checked })
+                }
+              />
+              Labels above data
+            </label>
           </Field>
 
           {state.url && (

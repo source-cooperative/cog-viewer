@@ -88,6 +88,7 @@ export function parseCogState(p: URLSearchParams): CogState {
       : "closed",
     gamma: parseGamma(p.get("gamma")),
     sigmoidal: parseSigmoidal(p.get("sigmoidal")),
+    labelsAbove: p.get("labels") !== "below",
   };
 }
 
@@ -105,6 +106,7 @@ export function serializeCogState(s: CogState): URLSearchParams {
   if (s.panel !== "closed") p.set("panel", s.panel);
   if (s.gamma !== 1) p.set("gamma", String(s.gamma));
   if (s.sigmoidal) p.set("sigmoidal", `${s.sigmoidal.contrast},${s.sigmoidal.bias}`);
+  if (!s.labelsAbove) p.set("labels", "below");
   return p;
 }
 

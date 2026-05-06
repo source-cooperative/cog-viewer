@@ -78,6 +78,10 @@ export default function App() {
   const [bandCount, setBandCount] = useState<number | null>(null);
   const [bandNames, setBandNames] = useState<Map<number, string> | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // First symbol (label) layer id in the active basemap style. Used as
+  // beforeId so the COG draws under labels when state.labelsAbove is true.
+  // Undefined when the basemap has no labels (satellite / off).
+  const [firstSymbolId, setFirstSymbolId] = useState<string | undefined>();
   // Tracks which URL the auto-mode effect has already fired for. Prevents a
   // late-arriving bandCount from clobbering an explicit user mode pick made
   // between the URL change and metadata load.
@@ -186,12 +190,18 @@ export default function App() {
         ? buildSingleCompositeRenderTile(state, colormapTexture)
         : buildRgbCompositeRenderTile(state);
 
+    // beforeId places the COG below the first symbol (label) layer so labels
+    // remain readable. Undefined = append on top — used when labelsAbove is
+    // off, or when the basemap has no labels (satellite / off / pre-load).
+    const beforeId = state.labelsAbove ? firstSymbolId : undefined;
+
     return new COGLayer({
       id: "cog",
       geotiff,
       opacity: state.opacity,
       getTileData,
       renderTile,
+      beforeId,
       onGeoTIFFLoad: (
         tiff: GeoTIFF,
         options: {
@@ -220,6 +230,8 @@ export default function App() {
     state.colormap,
     state.gamma,
     state.sigmoidal,
+    state.labelsAbove,
+    firstSymbolId,
     colormapTexture,
   ]);
 
@@ -229,6 +241,14 @@ export default function App() {
         ref={mapRef}
         initialViewState={{ longitude: 0, latitude: 0, zoom: 2 }}
         mapStyle={resolveBasemap(state.basemap, prefersDark)}
+        onStyleData={(e) => {
+          // styledata fires often (e.g., on tile arrival). Dedupe at the
+          // setState level so we only re-render when the symbol id actually
+          // changes (basemap swap or initial load).
+          const layers = e.target.getStyle()?.layers ?? [];
+          const next = layers.find((l) => l.type === "symbol")?.id;
+          setFirstSymbolId((prev) => (prev === next ? prev : next));
+        }}
       >
         <DeckGLOverlay
           layers={layer ? [layer] : []}
