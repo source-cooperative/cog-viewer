@@ -6,6 +6,19 @@ export type CogExample = {
 
 export const EXAMPLES: CogExample[] = [
   {
+    title:
+      "Potential Above-Ground Combustion in Boreal and Arctic North America for SSP585",
+    url: "https://data.source.coop/luddaludwig/potential-agc-combustion-ssp585-v0/AGC_final.tif",
+  },
+  {
+    title: "Flood Extent Detection (North Carolina, 2018)",
+    url: "https://data.source.coop/nasa/floods/florence_20180919t231350/florence_img_s1a_iw_rt30_20180919t231350_g_gpn_vh.tif",
+  },
+  {
+    title: "Anderson Co. Ortho Pan 2ft (2000)",
+    url: "https://data.source.coop/giswqs/tn-imagery/imagery/AndersonCo_OrthoPan_2ft_2000.tif",
+  },
+  {
     title: "Sentinel-2 True Color (New York, 2026)",
     url: "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2026/1/S2B_18TWL_20260101_0_L2A/TCI.tif",
   },
@@ -20,9 +33,5 @@ export const EXAMPLES: CogExample[] = [
   {
     title: "NLCD Land Cover 2023",
     url: "https://ds-wheels.s3.us-east-1.amazonaws.com/Annual_NLCD_LndCov_2023_CU_C1V0.tif",
-  },
-  {
-    title: "Anderson Co. Ortho Pan 2ft (2000)",
-    url: "https://data.source.coop/giswqs/tn-imagery/imagery/AndersonCo_OrthoPan_2ft_2000.tif",
   },
 ];
