@@ -85,9 +85,7 @@ function coerceForFormat(
 ): RasterTypedArray {
   if (format !== "r32float") return array;
   if (array instanceof Float32Array) return array;
-  const out = new Float32Array(array.length);
-  for (let i = 0; i < array.length; i++) out[i] = array[i] as number;
-  return out;
+  return Float32Array.from(array);
 }
 
 function extractBand(

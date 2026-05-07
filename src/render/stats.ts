@@ -5,12 +5,6 @@ import type {
   RasterArray,
 } from "@developmentseed/geotiff";
 
-/** Read SamplesPerPixel from the COG's primary IFD tags. */
-export function readBandCount(tiff: GeoTIFF): number | null {
-  const v = tiff.image.value(TiffTag.SamplesPerPixel);
-  return typeof v === "number" && v > 0 ? v : null;
-}
-
 /**
  * Parse band descriptions from the GDAL_METADATA XML tag. Looks for
  * `<Item name="DESCRIPTION" sample="N">name</Item>` (and a few common
@@ -121,10 +115,10 @@ function buildHistogram(
  * GDAL stats don't include histograms, so this returns stats with
  * empty bin arrays — the coarsest-overview pass populates them. */
 function fromGdalMetadata(tiff: GeoTIFF): AutoStats {
-  const meta = tiff.gdalMetadata;
-  if (!meta || meta.bandStatistics.size === 0) return NULL_STATS;
+  const stored = tiff.storedStats;
+  if (!stored) return NULL_STATS;
   const perBand = new Map<number, BandStats>();
-  for (const [band, stats] of meta.bandStatistics) {
+  for (const [band, stats] of stored) {
     if (stats.min !== null && stats.max !== null) {
       perBand.set(band, {
         min: stats.min,
@@ -193,10 +187,10 @@ export function pickSampleCoords(grid: {
 function readGdalRanges(
   tiff: GeoTIFF,
 ): Map<number, { min: number; max: number }> | null {
-  const meta = tiff.gdalMetadata;
-  if (!meta || meta.bandStatistics.size === 0) return null;
+  const stored = tiff.storedStats;
+  if (!stored) return null;
   const out = new Map<number, { min: number; max: number }>();
-  for (const [band, stats] of meta.bandStatistics) {
+  for (const [band, stats] of stored) {
     if (stats.min !== null && stats.max !== null && stats.min < stats.max) {
       out.set(band, { min: stats.min, max: stats.max });
     }

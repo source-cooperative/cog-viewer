@@ -20,11 +20,11 @@ import { BandHistogram } from "./BandHistogram";
 const DEFAULT_PERCENTILE_LO = 0.02;
 const DEFAULT_PERCENTILE_HI = 0.98;
 
-const RGB_CHANNEL_COLORS: [string, string, string] = [
-  "#d63838",
-  "#2c8a2c",
-  "#2a6db8",
-];
+const RGB_CHANNELS = [
+  { label: "R", color: "#d63838" },
+  { label: "G", color: "#2c8a2c" },
+  { label: "B", color: "#2a6db8" },
+] as const;
 
 const COLORMAP_NAMES = Object.keys(COLORMAP_INDEX).sort();
 
@@ -348,13 +348,13 @@ function RescaleSection({
   return (
     <Field label="Rescale">
       <div style={{ display: "grid", gap: 8 }}>
-        {(["R", "G", "B"] as const).map((label, i) => (
+        {RGB_CHANNELS.map(({ label, color }, i) => (
           <RescaleRow
             key={label}
             stats={perBandStats[i]}
             value={values[i]}
             onChange={(next) => setChannel(i, next)}
-            color={RGB_CHANNEL_COLORS[i]}
+            color={color}
             label={label}
             ariaPrefix={`rescale-${label.toLowerCase()}`}
           />
@@ -547,7 +547,7 @@ export function ControlsPanel({
                       gap: 6,
                     }}
                   >
-                    {(["R", "G", "B"] as const).map((label, i) => (
+                    {RGB_CHANNELS.map(({ label }, i) => (
                       <select
                         key={label}
                         aria-label={`band-${label.toLowerCase()}`}

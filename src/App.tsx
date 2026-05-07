@@ -24,7 +24,6 @@ import {
 } from "./render/render-pipeline";
 import {
   computeAutoStats,
-  readBandCount,
   readBandNames,
   type AutoStats,
 } from "./render/stats";
@@ -211,7 +210,7 @@ export default function App() {
           geographicBounds: { west: number; south: number; east: number; north: number };
         },
       ) => {
-        setBandCount(readBandCount(tiff));
+        setBandCount(tiff.count);
         setBandNames(readBandNames(tiff));
         const { west, south, east, north } = options.geographicBounds;
         mapRef.current?.fitBounds(

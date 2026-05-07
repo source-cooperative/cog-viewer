@@ -8,7 +8,6 @@ import {
   Colormap,
   CompositeBands,
   FilterNoDataVal,
-  LinearRescale,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import type { Texture } from "@luma.gl/core";
 import type { CogState } from "../state/types";
@@ -27,6 +26,7 @@ import {
 import type { MultiBandTileData } from "./tile-loader";
 
 type Range = [number, number];
+type Vec3 = [number, number, number];
 
 const RESCALE_EPSILON = 1e-9;
 const DEFAULT_PERCENTILE_LO = 0.02;
@@ -55,57 +55,43 @@ function statsForBand(
   return autoStats.perBand.get(band) ?? autoStats.global ?? null;
 }
 
-/** Resolve a single rescale window. Falls back to the 2–98% percentile of
- * the chosen band when the user hasn't set an override. */
+/** Resolve a per-channel rescale window broadcast across 3 GPU channels.
+ * For single-band rendering all three channels carry the same band value
+ * (see `pickMapping`), so passing vec3(v,v,v) to `PerBandLinearRescale`
+ * gives mathematically identical output to the scalar `LinearRescale`.
+ *
+ * Override precedence: `state.rescale` (broadcast its first pair if it
+ * has fewer pairs than channels), then per-band auto-stats percentile,
+ * then [0, 1]. Returns null only when `state.rescale` is unset AND
+ * autoStats can't supply any band — caller should skip the module. */
 function effectiveRescale(
   state: CogState,
   autoStats: AutoStats | null,
-  band: number,
-): Range | null {
-  if (state.rescale && state.rescale.length > 0) {
-    return safeRange(state.rescale[0]);
-  }
-  const stats = statsForBand(autoStats, band);
-  return stats ? safeRange(autoRangeFor(stats)) : null;
-}
-
-/** Resolve per-channel rescale for RGB mode: returns three [min, max] pairs.
- * If state.rescale has 3+ pairs, use them as R/G/B. If it has 1, broadcast.
- * Otherwise falls back to the 2–98% percentile of each channel's band. */
-function effectivePerBandRescale(
-  state: CogState,
-  autoStats: AutoStats | null,
   bands: number[],
-): { mins: [number, number, number]; maxs: [number, number, number] } | null {
-  if (state.rescale && state.rescale.length > 0) {
-    const pairs =
-      state.rescale.length >= 3
-        ? state.rescale.slice(0, 3).map(safeRange)
-        : [
-            safeRange(state.rescale[0]),
-            safeRange(state.rescale[0]),
-            safeRange(state.rescale[0]),
-          ];
-    return {
-      mins: [pairs[0][0], pairs[1][0], pairs[2][0]],
-      maxs: [pairs[0][1], pairs[1][1], pairs[2][1]],
-    };
-  }
-  // No user override → derive per-channel 2–98% from autoStats.
-  if (!autoStats?.perBand && !autoStats?.global) return null;
-  const ranges: [Range, Range, Range] = [
-    [0, 1],
-    [0, 1],
-    [0, 1],
-  ];
-  for (let i = 0; i < 3; i++) {
+): { mins: Vec3; maxs: Vec3 } | null {
+  const pickAuto = (i: number): Range => {
     const band = bands[i] ?? bands[bands.length - 1] ?? 1;
     const stats = statsForBand(autoStats, band);
-    ranges[i] = stats ? safeRange(autoRangeFor(stats)) : [0, 1];
+    return stats ? safeRange(autoRangeFor(stats)) : [0, 1];
+  };
+  const overrides = state.rescale;
+  const pickOverride = (i: number): Range =>
+    safeRange(overrides![i < overrides!.length ? i : 0]);
+
+  let r: Range, g: Range, b: Range;
+  if (overrides && overrides.length > 0) {
+    r = pickOverride(0);
+    g = pickOverride(1);
+    b = pickOverride(2);
+  } else {
+    if (!autoStats?.perBand && !autoStats?.global) return null;
+    r = pickAuto(0);
+    g = pickAuto(1);
+    b = pickAuto(2);
   }
   return {
-    mins: [ranges[0][0], ranges[1][0], ranges[2][0]],
-    maxs: [ranges[0][1], ranges[1][1], ranges[2][1]],
+    mins: [r[0], g[0], b[0]],
+    maxs: [r[1], g[1], b[1]],
   };
 }
 
@@ -165,31 +151,60 @@ function pickBand(
   return first.done ? null : first.value;
 }
 
-/** RGB renderTile: composes user-selected bands into RGB via
- * `CompositeBands`, then rescales and discards nodata. Re-renders without
- * a re-fetch when the selection changes (within the cached band set). */
-export function buildRgbCompositeRenderTile(
+type RenderTileMode =
+  | { kind: "rgb" }
+  | { kind: "single"; colormapTexture: Texture; colormapIndex: number };
+
+/** Resolve the CompositeBands {r,g,b} mapping. RGB picks each requested
+ * band independently (g/b optional — falls back to r); single-band
+ * broadcasts one band into all three channels so the colormap can
+ * sample `color.r`. Returns null when the required first band isn't
+ * available (caller should bail with an empty pipeline). */
+function pickMapping(
+  data: MultiBandTileData,
+  requested: number[],
+  mode: RenderTileMode["kind"],
+): { r: string; g?: string; b?: string } | null {
+  if (mode === "single") {
+    const band = pickBand(data, requested[0]);
+    return band ? { r: band, g: band, b: band } : null;
+  }
+  const r = pickBand(data, requested[0]);
+  if (!r) return null;
+  const mapping: { r: string; g?: string; b?: string } = { r };
+  const g = pickBand(data, requested[1]);
+  if (g) mapping.g = g;
+  const b = pickBand(data, requested[2]);
+  if (b) mapping.b = b;
+  return mapping;
+}
+
+/** Shared renderTile builder. Handles both RGB and single-band paths
+ * via a discriminated `mode`. The two paths differ only in: (a) which
+ * bands feed CompositeBands, (b) whether a Colormap module is appended
+ * at the end. Rescale, nodata, stretch, gamma all flow through the
+ * same code regardless of mode. */
+function buildRenderTile(
   state: CogState,
   autoStats: AutoStats | null,
+  mode: RenderTileMode,
 ) {
   return function renderTile(data: MultiBandTileData): RenderTileResult {
     if (data.bands.size === 0) return { renderPipeline: [] };
-    const requested = state.bands ?? [1, 2, 3];
-    const r = pickBand(data, requested[0]);
-    if (!r) return { renderPipeline: [] };
-    const mapping: { r: string; g?: string; b?: string } = { r };
-    const g = pickBand(data, requested[1]);
-    if (g) mapping.g = g;
-    const b = pickBand(data, requested[2]);
-    if (b) mapping.b = b;
+    const requested =
+      mode.kind === "single"
+        ? [state.bands?.[0] ?? 1]
+        : (state.bands ?? [1, 2, 3]);
+    const mapping = pickMapping(data, requested, mode.kind);
+    if (!mapping) return { renderPipeline: [] };
 
     const compositeProps = buildCompositeBandsProps(mapping, data.bands);
     const pipeline: RasterModule[] = [
       { module: CompositeBands, props: compositeProps },
     ];
 
-    // Filter nodata BEFORE any rescale / gamma so the comparison happens
-    // against the texture's native sample value. NaN nodata uses the
+    // Filter nodata BEFORE any rescale / gamma / colormap so the comparison
+    // happens against the texture's native sample value. NaN nodata uses the
     // custom isnan() shader; everything else uses FilterNoDataVal with the
     // value normalized into the GPU's sample space (uint8 255 → 1.0 for
     // r8unorm).
@@ -199,20 +214,20 @@ export function buildRgbCompositeRenderTile(
       if (module) pipeline.push(module);
     }
 
-    const perBand = effectivePerBandRescale(state, autoStats, requested);
-    if (perBand) {
+    const rescale = effectiveRescale(state, autoStats, requested);
+    if (rescale) {
       pipeline.push({
         module: PerBandLinearRescale,
         props: {
           rescaleMin: [
-            perBand.mins[0] / data.sampleScale,
-            perBand.mins[1] / data.sampleScale,
-            perBand.mins[2] / data.sampleScale,
+            rescale.mins[0] / data.sampleScale,
+            rescale.mins[1] / data.sampleScale,
+            rescale.mins[2] / data.sampleScale,
           ],
           rescaleMax: [
-            perBand.maxs[0] / data.sampleScale,
-            perBand.maxs[1] / data.sampleScale,
-            perBand.maxs[2] / data.sampleScale,
+            rescale.maxs[0] / data.sampleScale,
+            rescale.maxs[1] / data.sampleScale,
+            rescale.maxs[2] / data.sampleScale,
           ],
         },
       });
@@ -220,8 +235,29 @@ export function buildRgbCompositeRenderTile(
 
     pushAdjustments(state, pipeline);
 
+    if (mode.kind === "single") {
+      pipeline.push({
+        module: Colormap,
+        props: {
+          colormapTexture: mode.colormapTexture,
+          colormapIndex: mode.colormapIndex,
+          reversed: false,
+        },
+      });
+    }
+
     return { renderPipeline: pipeline };
   };
+}
+
+/** RGB renderTile: composes user-selected bands into RGB via
+ * `CompositeBands`, then rescales and discards nodata. Re-renders without
+ * a re-fetch when the selection changes (within the cached band set). */
+export function buildRgbCompositeRenderTile(
+  state: CogState,
+  autoStats: AutoStats | null,
+) {
+  return buildRenderTile(state, autoStats, { kind: "rgb" });
 }
 
 /** Single-band renderTile. Uses CompositeBands to broadcast one band into
@@ -235,49 +271,9 @@ export function buildSingleCompositeRenderTile(
   const name = (state.colormap ?? "viridis").toLowerCase();
   const colormapIndex =
     (COLORMAP_INDEX as Record<string, number>)[name] ?? COLORMAP_INDEX.viridis;
-  return function renderTile(data: MultiBandTileData): RenderTileResult {
-    if (data.bands.size === 0) return { renderPipeline: [] };
-    const band = pickBand(data, state.bands?.[0]);
-    if (!band) return { renderPipeline: [] };
-    const compositeProps = buildCompositeBandsProps(
-      { r: band, g: band, b: band },
-      data.bands,
-    );
-    const pipeline: RasterModule[] = [
-      { module: CompositeBands, props: compositeProps },
-    ];
-
-    // Filter nodata BEFORE rescale / gamma / colormap so the comparison
-    // runs against the texture's native sample value (NaN-aware via
-    // nodataModule).
-    const nodata = effectiveNodata(state, data.nodata);
-    if (nodata !== null) {
-      const module = nodataModule(nodata, data.sampleScale);
-      if (module) pipeline.push(module);
-    }
-
-    const rescale = effectiveRescale(
-      state,
-      autoStats,
-      state.bands?.[0] ?? 1,
-    );
-    if (rescale) {
-      pipeline.push({
-        module: LinearRescale,
-        props: {
-          rescaleMin: rescale[0] / data.sampleScale,
-          rescaleMax: rescale[1] / data.sampleScale,
-        },
-      });
-    }
-
-    pushAdjustments(state, pipeline);
-
-    pipeline.push({
-      module: Colormap,
-      props: { colormapTexture, colormapIndex, reversed: false },
-    });
-
-    return { renderPipeline: pipeline };
-  };
+  return buildRenderTile(state, autoStats, {
+    kind: "single",
+    colormapTexture,
+    colormapIndex,
+  });
 }

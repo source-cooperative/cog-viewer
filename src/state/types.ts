@@ -17,7 +17,6 @@ export type CogState = {
   colormap: string | null;
   nodata: number | "off" | null;
   opacity: number;
-  colorspace: string | null;
   basemap: Basemap;
   panel: PanelState;
   /** Power-law gamma correction (1.0 = off). */

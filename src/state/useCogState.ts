@@ -70,7 +70,6 @@ export function parseCogState(p: URLSearchParams): CogState {
     colormap: p.get("colormap"),
     nodata: parseNodata(p.get("nodata")),
     opacity: parseOpacity(p.get("opacity")),
-    colorspace: p.get("colorspace"),
     basemap: VALID_BASEMAPS.includes(basemapRaw as Basemap)
       ? (basemapRaw as Basemap)
       : "auto",
@@ -94,7 +93,6 @@ export function serializeCogState(s: CogState): URLSearchParams {
   if (s.colormap) p.set("colormap", s.colormap);
   if (s.nodata !== null) p.set("nodata", String(s.nodata));
   if (s.opacity !== 1) p.set("opacity", String(s.opacity));
-  if (s.colorspace) p.set("colorspace", s.colorspace);
   if (s.basemap !== "auto") p.set("basemap", s.basemap);
   if (s.panel !== "closed") p.set("panel", s.panel);
   if (s.gamma !== 1) p.set("gamma", String(s.gamma));
