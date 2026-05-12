@@ -274,6 +274,7 @@ export default function App() {
         bandCount={bandCount}
         bandNames={bandNames}
         autoStats={autoStats}
+        geotiff={geotiff}
       />
 
       <Toast message={error} onDismiss={() => setError(null)} />

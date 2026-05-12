@@ -1,4 +1,5 @@
 import { COLORMAP_INDEX } from "@developmentseed/deck.gl-raster/gpu-modules";
+import type { GeoTIFF } from "@developmentseed/geotiff";
 import { InfoIcon, Tooltip } from "./Tooltip";
 import {
   percentileFromHistogram,
@@ -14,6 +15,7 @@ import type {
   Stretch,
 } from "../state/types";
 import { BandHistogram } from "./BandHistogram";
+import { MetadataPanel } from "./MetadataPanel";
 
 /** Default 2-98% percentile range used as the displayed rescale before the
  * user picks a preset or types a custom range. Matches QGIS / rio-tiler. */
@@ -42,6 +44,7 @@ type Props = {
   bandCount: number | null;
   bandNames: Map<number, string> | null;
   autoStats: AutoStats | null;
+  geotiff: GeoTIFF | null;
 };
 
 function bandLabel(idx: number, names: Map<number, string> | null): string {
@@ -470,6 +473,7 @@ export function ControlsPanel({
   bandCount,
   bandNames,
   autoStats,
+  geotiff,
 }: Props) {
   const open = state.panel === "open";
   const setOpen = (next: boolean) =>
@@ -518,77 +522,81 @@ export function ControlsPanel({
       <div className="panel-body">
         {state.url && (
             <>
-              <CollapsibleSection title="Source" defaultOpen>
-                <Field label="Mode" info={HELP.mode}>
-                <select
-                  aria-label="mode"
-                  value={effectiveMode}
-                  onChange={(e) =>
-                    update({
-                      mode: e.target.value as Mode,
-                      bands:
-                        e.target.value === "single"
-                          ? [effectiveBands[0]]
-                          : [1, 2, 3],
-                    })
-                  }
-                >
-                  <option value="rgb">RGB / composite</option>
-                  <option value="single">Single band + colormap</option>
-                </select>
-              </Field>
-
-              {effectiveMode === "rgb" && (
-                <Field label="Bands (R, G, B)" info={HELP.bandsRgb}>
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-                      gap: 6,
-                    }}
-                  >
-                    {RGB_CHANNELS.map(({ label }, i) => (
-                      <select
-                        key={label}
-                        aria-label={`band-${label.toLowerCase()}`}
-                        value={effectiveBands[i] ?? bandOptions[0]}
-                        onChange={(e) => {
-                          const next = [...effectiveBands];
-                          next[i] = Number(e.target.value);
-                          update({ bands: next });
-                        }}
-                      >
-                        {bandOptions.map((n) => (
-                          <option key={n} value={n}>
-                            {bandLabel(n, bandNames)}
-                          </option>
-                        ))}
-                      </select>
-                    ))}
-                  </div>
-                </Field>
+              {geotiff && (
+                <CollapsibleSection title="Metadata">
+                  <MetadataPanel geotiff={geotiff} />
+                </CollapsibleSection>
               )}
-
-              {effectiveMode === "single" && (
-                <Field label="Band" info={HELP.bandSingle}>
-                  <select
-                    aria-label="band"
-                    value={effectiveBands[0] ?? 1}
-                    onChange={(e) =>
-                      update({ bands: [Number(e.target.value)] })
-                    }
-                  >
-                    {bandOptions.map((n) => (
-                      <option key={n} value={n}>
-                        {n}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              )}
-              </CollapsibleSection>
 
               <CollapsibleSection title="Rendering" defaultOpen>
+                <Field label="Mode" info={HELP.mode}>
+                  <select
+                    aria-label="mode"
+                    value={effectiveMode}
+                    onChange={(e) =>
+                      update({
+                        mode: e.target.value as Mode,
+                        bands:
+                          e.target.value === "single"
+                            ? [effectiveBands[0]]
+                            : [1, 2, 3],
+                      })
+                    }
+                  >
+                    <option value="rgb">RGB / composite</option>
+                    <option value="single">Single band + colormap</option>
+                  </select>
+                </Field>
+
+                {effectiveMode === "rgb" && (
+                  <Field label="Bands (R, G, B)" info={HELP.bandsRgb}>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                        gap: 6,
+                      }}
+                    >
+                      {RGB_CHANNELS.map(({ label }, i) => (
+                        <select
+                          key={label}
+                          aria-label={`band-${label.toLowerCase()}`}
+                          value={effectiveBands[i] ?? bandOptions[0]}
+                          onChange={(e) => {
+                            const next = [...effectiveBands];
+                            next[i] = Number(e.target.value);
+                            update({ bands: next });
+                          }}
+                        >
+                          {bandOptions.map((n) => (
+                            <option key={n} value={n}>
+                              {bandLabel(n, bandNames)}
+                            </option>
+                          ))}
+                        </select>
+                      ))}
+                    </div>
+                  </Field>
+                )}
+
+                {effectiveMode === "single" && (
+                  <Field label="Band" info={HELP.bandSingle}>
+                    <select
+                      aria-label="band"
+                      value={effectiveBands[0] ?? 1}
+                      onChange={(e) =>
+                        update({ bands: [Number(e.target.value)] })
+                      }
+                    >
+                      {bandOptions.map((n) => (
+                        <option key={n} value={n}>
+                          {n}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
+
                 <RescaleSection
                   mode={effectiveMode}
                   bands={effectiveBands}

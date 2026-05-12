@@ -240,3 +240,97 @@ details.section > div.section-body {
   gap: 10px;
   margin-top: 8px;
 }
+
+/* Metadata panel — nested under a regular .section but with its own
+ * (more compact) collapsible sub-sections. */
+.meta-root {
+  display: grid;
+  gap: 6px;
+}
+
+details.meta-sub > summary {
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 2px 0;
+  display: flex;
+  align-items: center;
+}
+details.meta-sub > summary::-webkit-details-marker {
+  display: none;
+}
+details.meta-sub > summary::after {
+  content: "▸";
+  font-size: 16px;
+  color: var(--text-muted);
+  margin-left: auto;
+  transition: transform 100ms ease;
+}
+details.meta-sub[open] > summary::after {
+  transform: rotate(90deg);
+}
+.meta-sub + .meta-sub {
+  border-top: 1px dashed var(--border);
+  padding-top: 4px;
+}
+.meta-sub-body {
+  margin-top: 4px;
+  font-size: 12px;
+}
+
+.meta-kv {
+  display: grid;
+  grid-template-columns: minmax(80px, max-content) minmax(0, 1fr);
+  column-gap: 10px;
+  row-gap: 2px;
+  margin: 0;
+}
+.meta-kv-row {
+  display: contents;
+}
+.meta-kv dt {
+  color: var(--text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  align-self: baseline;
+}
+.meta-kv dd {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  word-break: break-word;
+}
+
+.meta-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 4px;
+}
+.meta-list li {
+  word-break: break-word;
+}
+.meta-muted {
+  color: var(--text-muted);
+}
+
+.meta-xml {
+  margin: 0;
+  padding: 6px 8px;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.4;
+  max-height: 240px;
+  overflow: auto;
+  white-space: pre;
+}
