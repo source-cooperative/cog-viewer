@@ -621,94 +621,97 @@ export function ControlsPanel({
                   </Field>
                 )}
 
-                <Field
-                  label={`Opacity (${state.opacity.toFixed(2)})`}
-                  info={HELP.opacity}
-                >
-                  <input
-                    aria-label="opacity"
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    value={state.opacity}
-                    onChange={(e) =>
-                      update({ opacity: Number(e.target.value) })
-                    }
-                  />
-                </Field>
-              </CollapsibleSection>
+                <details className="sub-section">
+                  <summary>Advanced</summary>
+                  <div className="sub-section-body">
+                    <Field label="Nodata" info={HELP.nodata}>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns:
+                            typeof state.nodata === "number"
+                              ? "minmax(0, 1fr) minmax(0, 1fr)"
+                              : "minmax(0, 1fr)",
+                          gap: 6,
+                        }}
+                      >
+                        <select
+                          aria-label="nodata-mode"
+                          value={
+                            state.nodata === "off"
+                              ? "off"
+                              : state.nodata === null
+                                ? "auto"
+                                : "value"
+                          }
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            if (v === "auto") update({ nodata: null });
+                            else if (v === "off") update({ nodata: "off" });
+                            else update({ nodata: 0 });
+                          }}
+                        >
+                          <option value="auto">Auto (from COG)</option>
+                          <option value="value">Value</option>
+                          <option value="off">Off</option>
+                        </select>
+                        {typeof state.nodata === "number" && (
+                          <input
+                            aria-label="nodata-value"
+                            type="number"
+                            step="any"
+                            value={state.nodata}
+                            onChange={(e) =>
+                              update({ nodata: Number(e.target.value) })
+                            }
+                          />
+                        )}
+                      </div>
+                    </Field>
 
-              <CollapsibleSection title="Advanced">
-                <Field label="Nodata" info={HELP.nodata}>
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns:
-                        typeof state.nodata === "number"
-                          ? "minmax(0, 1fr) minmax(0, 1fr)"
-                          : "minmax(0, 1fr)",
-                      gap: 6,
-                    }}
-                  >
-                    <select
-                      aria-label="nodata-mode"
-                      value={
-                        state.nodata === "off"
-                          ? "off"
-                          : state.nodata === null
-                            ? "auto"
-                            : "value"
-                      }
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        if (v === "auto") update({ nodata: null });
-                        else if (v === "off") update({ nodata: "off" });
-                        else update({ nodata: 0 });
-                      }}
+                    <Field label="Curve" info={HELP.curve}>
+                      <StretchRow
+                        value={state.stretch}
+                        onChange={(stretch) => update({ stretch })}
+                      />
+                    </Field>
+
+                    <Field
+                      label={`Gamma (${state.gamma.toFixed(2)})`}
+                      info="Power-law correction applied AFTER the curve. Gamma > 1 lifts shadows; gamma < 1 deepens them. 1.0 disables it."
                     >
-                      <option value="auto">Auto (from COG)</option>
-                      <option value="value">Value</option>
-                      <option value="off">Off</option>
-                    </select>
-                    {typeof state.nodata === "number" && (
                       <input
-                        aria-label="nodata-value"
-                        type="number"
-                        step="any"
-                        value={state.nodata}
+                        aria-label="gamma"
+                        type="range"
+                        min={0.1}
+                        max={3}
+                        step={0.05}
+                        value={state.gamma}
                         onChange={(e) =>
-                          update({ nodata: Number(e.target.value) })
+                          update({ gamma: Number(e.target.value) })
+                        }
+                        onDoubleClick={() => update({ gamma: 1 })}
+                      />
+                    </Field>
+
+                    <Field
+                      label={`Opacity (${state.opacity.toFixed(2)})`}
+                      info={HELP.opacity}
+                    >
+                      <input
+                        aria-label="opacity"
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        value={state.opacity}
+                        onChange={(e) =>
+                          update({ opacity: Number(e.target.value) })
                         }
                       />
-                    )}
+                    </Field>
                   </div>
-                </Field>
-
-                <Field label="Curve" info={HELP.curve}>
-                  <StretchRow
-                    value={state.stretch}
-                    onChange={(stretch) => update({ stretch })}
-                  />
-                </Field>
-
-                <Field
-                  label={`Gamma (${state.gamma.toFixed(2)})`}
-                  info="Power-law correction applied AFTER the curve. Gamma > 1 lifts shadows; gamma < 1 deepens them. 1.0 disables it."
-                >
-                  <input
-                    aria-label="gamma"
-                    type="range"
-                    min={0.1}
-                    max={3}
-                    step={0.05}
-                    value={state.gamma}
-                    onChange={(e) =>
-                      update({ gamma: Number(e.target.value) })
-                    }
-                    onDoubleClick={() => update({ gamma: 1 })}
-                  />
-                </Field>
+                </details>
               </CollapsibleSection>
             </>
           )}

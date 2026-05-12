@@ -248,7 +248,7 @@ details.section > div.section-body {
   gap: 6px;
 }
 
-details.meta-sub > summary {
+details.sub-section > summary {
   list-style: none;
   cursor: pointer;
   user-select: none;
@@ -261,26 +261,28 @@ details.meta-sub > summary {
   display: flex;
   align-items: center;
 }
-details.meta-sub > summary::-webkit-details-marker {
+details.sub-section > summary::-webkit-details-marker {
   display: none;
 }
-details.meta-sub > summary::after {
+details.sub-section > summary::after {
   content: "▸";
   font-size: 16px;
   color: var(--text-muted);
   margin-left: auto;
   transition: transform 100ms ease;
 }
-details.meta-sub[open] > summary::after {
+details.sub-section[open] > summary::after {
   transform: rotate(90deg);
 }
-.meta-sub + .meta-sub {
+.sub-section + .sub-section {
   border-top: 1px dashed var(--border);
   padding-top: 4px;
 }
-.meta-sub-body {
+.sub-section-body {
   margin-top: 4px;
   font-size: 12px;
+  display: grid;
+  gap: 10px;
 }
 
 .meta-kv {

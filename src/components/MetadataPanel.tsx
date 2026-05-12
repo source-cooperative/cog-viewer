@@ -55,9 +55,9 @@ function Subsection({
   defaultOpen?: boolean;
 }) {
   return (
-    <details className="meta-sub" open={defaultOpen}>
+    <details className="sub-section" open={defaultOpen}>
       <summary>{title}</summary>
-      <div className="meta-sub-body">{children}</div>
+      <div className="sub-section-body">{children}</div>
     </details>
   );
 }
