@@ -32,6 +32,14 @@ describe("statusFromSizes", () => {
     });
     expect(status.kind).toBe("confirm");
   });
+
+  it("returns 'auto' at exactly the gate (boundary pinned to >)", () => {
+    const status = statusFromSizes({
+      decodedBytes: SIZE_GATE_BYTES,
+      diskBytes: 0,
+    });
+    expect(status.kind).toBe("auto");
+  });
 });
 
 describe("shouldRender", () => {
