@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   initialStatus,
-  type NonTiledStatus,
   SIZE_GATE_BYTES,
   shouldRender,
   statusFromSizes,

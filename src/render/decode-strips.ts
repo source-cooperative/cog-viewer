@@ -1,5 +1,5 @@
 import type { Compression } from "@cogeotiff/core";
-import { SampleFormat, TiffTag } from "@cogeotiff/core";
+import { Predictor, SampleFormat, TiffTag } from "@cogeotiff/core";
 import type {
   DecodedPixels,
   DecoderMetadata,
@@ -78,6 +78,16 @@ export async function decodeStrips(
   const bitsPerSample = cachedTags.bitsPerSample[0];
   if (sampleFormat === undefined || bitsPerSample === undefined) {
     throw new Error("SampleFormat or BitsPerSample is empty");
+  }
+
+  // Predictor is applied AFTER decoding in upstream's `decode()`, which we
+  // can't reuse because it isn't re-exported. Rather than silently produce
+  // wrong pixels for files with a non-None predictor (Horizontal=2 is
+  // common with LZW/Deflate), fail loud and document the limitation.
+  if (cachedTags.predictor && cachedTags.predictor !== Predictor.None) {
+    throw new Error(
+      `Predictor ${cachedTags.predictor} is not supported for non-tiled GeoTIFFs. Convert with gdal_translate -of COG.`,
+    );
   }
 
   // Allocate one full-image typed array per band, then fill row ranges

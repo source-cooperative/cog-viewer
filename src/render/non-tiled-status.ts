@@ -5,18 +5,21 @@ import {
 
 export { SIZE_GATE_BYTES };
 
-export type NonTiledStatus =
-  | null
-  | { kind: "auto"; decodedBytes: number; diskBytes: number }
-  | { kind: "confirm"; decodedBytes: number; diskBytes: number }
-  | { kind: "confirmed"; decodedBytes: number; diskBytes: number };
+/** Concrete non-tiled status (always non-null). */
+export type NonTiledStatusActive = {
+  kind: "auto" | "confirm" | "confirmed";
+  decodedBytes: number;
+  diskBytes: number;
+};
+
+export type NonTiledStatus = null | NonTiledStatusActive;
 
 export const initialStatus: NonTiledStatus = null;
 
 /** Derive the initial status (auto vs confirm) from raw sizes. The
  * worst of (decoded, disk) decides — JPEG-compressed stripped TIFFs
  * are small on disk but huge after decode. */
-export function statusFromSizes(sizes: NonTiledSizes): NonTiledStatus {
+export function statusFromSizes(sizes: NonTiledSizes): NonTiledStatusActive {
   const worst = Math.max(sizes.decodedBytes, sizes.diskBytes);
   const kind = worst > SIZE_GATE_BYTES ? "confirm" : "auto";
   return { kind, decodedBytes: sizes.decodedBytes, diskBytes: sizes.diskBytes };
