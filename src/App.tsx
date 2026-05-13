@@ -163,11 +163,19 @@ export default function App() {
     return () => ctrl.abort();
   }, [geotiff]);
 
-  // When a non-tiled GeoTIFF arrives, compute sizes and seed status.
-  // Tiled COGs leave status null and follow the existing path.
+  // When a non-tiled GeoTIFF arrives, validate CRS + compute sizes + seed
+  // status. Doing the CRS check here (rather than inside the loader
+  // effect) lets us fail fast on non-4326 before decoding all strips.
   useEffect(() => {
     if (!geotiff) return;
     if (geotiff.isTiled) return;
+    try {
+      setReprojectionFns(buildReprojectors(geotiff));
+    } catch (err) {
+      console.error("buildReprojectors failed", err);
+      setError(humanizeError(err));
+      return;
+    }
     const inputs = extractGeoTiffSizeInputs(geotiff);
     if (!inputs) {
       setError("Stripped GeoTIFF is missing StripByteCounts and cannot be sized.");
@@ -190,7 +198,6 @@ export default function App() {
         const raster = await loadNonTiled(geotiff, bands, device, ctrl.signal);
         if (ctrl.signal.aborted) return;
         setNonTiledRaster(raster);
-        setReprojectionFns(buildReprojectors(geotiff));
         // Trigger fitBounds for the non-tiled path (COGLayer's onGeoTIFFLoad
         // does this for tiled). Use the existing geotiff.bbox + transform.
         const bbox = geotiff.bbox;
@@ -210,7 +217,7 @@ export default function App() {
       }
     })();
     return () => ctrl.abort();
-  }, [geotiff, device, nonTiledStatus?.kind, state.bands, state.mode]);
+  }, [geotiff, device, nonTiledStatus?.kind, state.bands]);
 
   // After bandCount resolves for a URL, fire a one-shot auto-pick of mode +
   // bands when the user hasn't set them. The ref-guard prevents a late
