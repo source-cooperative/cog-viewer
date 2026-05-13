@@ -1,6 +1,8 @@
+import { TiffTag } from "@cogeotiff/core";
 import { describe, expect, it } from "vitest";
 import {
   computeNonTiledSizes,
+  extractGeoTiffSizeInputs,
   shouldShowBothSizes,
   SIZE_GATE_BYTES,
 } from "../non-tiled-sizes";
@@ -74,5 +76,43 @@ describe("shouldShowBothSizes", () => {
 describe("SIZE_GATE_BYTES", () => {
   it("is 64 MiB", () => {
     expect(SIZE_GATE_BYTES).toBe(64 * 1024 * 1024);
+  });
+});
+
+describe("extractGeoTiffSizeInputs", () => {
+  it("reads width/height/samplesPerPixel/bitsPerSample/StripByteCounts", () => {
+    // Minimal duck-typed stub matching what the adapter touches.
+    const stub = {
+      width: 1024,
+      height: 512,
+      count: 3,
+      cachedTags: { bitsPerSample: new Uint16Array([16, 16, 16]) },
+      image: {
+        tags: new Map<number, { count: number; value: unknown }>([
+          [TiffTag.StripByteCounts, { count: 2, value: [10000, 20000] }],
+        ]),
+      },
+    };
+    const input = extractGeoTiffSizeInputs(
+      stub as unknown as import("@developmentseed/geotiff").GeoTIFF,
+    );
+    expect(input).toEqual({
+      width: 1024,
+      height: 512,
+      samplesPerPixel: 3,
+      bitsPerSample: 16,
+      stripByteCounts: [10000, 20000],
+    });
+  });
+
+  it("returns null when StripByteCounts is absent", () => {
+    const stub = {
+      width: 1, height: 1, count: 1,
+      cachedTags: { bitsPerSample: new Uint16Array([8]) },
+      image: { tags: new Map() },
+    };
+    expect(
+      extractGeoTiffSizeInputs(stub as unknown as import("@developmentseed/geotiff").GeoTIFF),
+    ).toBeNull();
   });
 });
