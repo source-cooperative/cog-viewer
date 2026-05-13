@@ -17,7 +17,18 @@ import { loadGeoTIFF } from "./cog/load-geotiff";
 import { ControlsPanel } from "./components/ControlsPanel";
 import { EmptyState } from "./components/EmptyState";
 import { FullscreenButton } from "./components/FullscreenButton";
+import { NonTiledBanner } from "./components/NonTiledBanner";
 import { Toast, humanizeError } from "./components/Toast";
+import { loadNonTiled, type NonTiledRaster } from "./render/load-non-tiled";
+import {
+  computeNonTiledSizes,
+  extractGeoTiffSizeInputs,
+} from "./render/non-tiled-sizes";
+import {
+  type NonTiledStatus,
+  shouldRender,
+  statusFromSizes,
+} from "./render/non-tiled-status";
 import {
   buildRgbCompositeRenderTile,
   buildSingleCompositeRenderTile,
@@ -78,6 +89,8 @@ export default function App() {
   const [bandCount, setBandCount] = useState<number | null>(null);
   const [bandNames, setBandNames] = useState<Map<number, string> | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [nonTiledStatus, setNonTiledStatus] = useState<NonTiledStatus>(null);
+  const [nonTiledRaster, setNonTiledRaster] = useState<NonTiledRaster | null>(null);
   // First symbol (label) layer id in the active basemap style. Used as
   // beforeId so the COG draws under labels when state.labelsAbove is true.
   // Undefined when the basemap has no labels (satellite / off).
@@ -108,6 +121,8 @@ export default function App() {
     setBandCount(null);
     setBandNames(null);
     setError(null);
+    setNonTiledStatus(null);
+    setNonTiledRaster(null);
     const url = state.url;
     if (!url) return;
     let cancelled = false;
@@ -143,6 +158,60 @@ export default function App() {
     })();
     return () => ctrl.abort();
   }, [geotiff]);
+
+  // When a non-tiled GeoTIFF arrives, compute sizes and seed status.
+  // Tiled COGs leave status null and follow the existing path.
+  useEffect(() => {
+    if (!geotiff) return;
+    if (geotiff.isTiled) return;
+    const inputs = extractGeoTiffSizeInputs(geotiff);
+    if (!inputs) {
+      setError("Stripped GeoTIFF is missing StripByteCounts and cannot be sized.");
+      return;
+    }
+    const sizes = computeNonTiledSizes(inputs);
+    setNonTiledStatus(statusFromSizes(sizes));
+  }, [geotiff]);
+
+  // Run loadNonTiled when (a) we have a non-tiled geotiff, (b) the status
+  // indicates we should render, (c) the device is ready, (d) bands are
+  // known. Re-runs on band changes so we only upload what's needed.
+  useEffect(() => {
+    if (!geotiff || !device) return;
+    if (!shouldRender(nonTiledStatus)) return;
+    const bands = state.bands ?? (geotiff.count >= 3 ? [1, 2, 3] : [1]);
+    const ctrl = new AbortController();
+    (async () => {
+      try {
+        const raster = await loadNonTiled(geotiff, bands, device, ctrl.signal);
+        if (ctrl.signal.aborted) return;
+        setNonTiledRaster(raster);
+        // Deviation from plan: `extractGeotiffReprojectors` isn't re-exported
+        // from `@developmentseed/deck.gl-geotiff` (only `.` is in its
+        // `exports` field), and its dependency `proj4` / raster-reproject
+        // aren't direct deps of this app either. Task 9 will resolve the
+        // import path (or add direct deps + a local wrapper) when the
+        // `RasterLayer` actually needs the fns.
+        // Trigger fitBounds for the non-tiled path (COGLayer's onGeoTIFFLoad
+        // does this for tiled). Use the existing geotiff.bbox + transform.
+        const bbox = geotiff.bbox;
+        mapRef.current?.fitBounds(
+          [
+            [bbox[0], bbox[1]],
+            [bbox[2], bbox[3]],
+          ],
+          { padding: 40, duration: 800 },
+        );
+        setBandCount(geotiff.count);
+      } catch (err) {
+        if (!ctrl.signal.aborted) {
+          console.error("loadNonTiled failed", err);
+          setError(humanizeError(err));
+        }
+      }
+    })();
+    return () => ctrl.abort();
+  }, [geotiff, device, nonTiledStatus?.kind, state.bands, state.mode]);
 
   // After bandCount resolves for a URL, fire a one-shot auto-pick of mode +
   // bands when the user hasn't set them. The ref-guard prevents a late
@@ -237,6 +306,9 @@ export default function App() {
     colormapTexture,
     bandNames,
     autoStats,
+    // Tracked so Task 9's non-tiled branch picks up new raster results
+    // when they resolve. The current path ignores `nonTiledRaster`.
+    nonTiledRaster,
   ]);
 
   // Apply the dark theme to <html> so portal-rendered children
@@ -278,6 +350,13 @@ export default function App() {
       />
 
       <Toast message={error} onDismiss={() => setError(null)} />
+
+      <NonTiledBanner
+        status={nonTiledStatus}
+        onConfirm={() =>
+          setNonTiledStatus((s) => (s ? { ...s, kind: "confirmed" } : s))
+        }
+      />
 
       <FullscreenButton />
 
