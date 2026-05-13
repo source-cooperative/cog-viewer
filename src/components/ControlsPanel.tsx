@@ -1,5 +1,7 @@
 import { COLORMAP_INDEX } from "@developmentseed/deck.gl-raster/gpu-modules";
+import colormapsPngUrl from "@developmentseed/deck.gl-raster/gpu-modules/colormaps.png";
 import type { GeoTIFF } from "@developmentseed/geotiff";
+import { ColormapPicker, type ColormapOption } from "./ColormapPicker";
 import { InfoIcon, Tooltip } from "./Tooltip";
 import {
   percentileFromHistogram,
@@ -29,6 +31,12 @@ const RGB_CHANNELS = [
 ] as const;
 
 const COLORMAP_NAMES = Object.keys(COLORMAP_INDEX).sort();
+const COLORMAP_ROW_COUNT = Object.keys(COLORMAP_INDEX).length;
+const COLORMAP_OPTIONS: ColormapOption[] = COLORMAP_NAMES.map((name) => ({
+  name,
+  label: name,
+  rowIndex: (COLORMAP_INDEX as Record<string, number>)[name],
+}));
 
 const BASEMAP_OPTIONS: { value: Basemap; label: string }[] = [
   { value: "auto", label: "Auto (system)" },
@@ -607,17 +615,13 @@ export function ControlsPanel({
 
                 {effectiveMode === "single" && (
                   <Field label="Colormap" info={HELP.colormap}>
-                    <select
-                      aria-label="colormap"
+                    <ColormapPicker
+                      colormapsPngUrl={colormapsPngUrl}
+                      rowCount={COLORMAP_ROW_COUNT}
                       value={state.colormap ?? "viridis"}
-                      onChange={(e) => update({ colormap: e.target.value })}
-                    >
-                      {COLORMAP_NAMES.map((n) => (
-                        <option key={n} value={n}>
-                          {n}
-                        </option>
-                      ))}
-                    </select>
+                      options={COLORMAP_OPTIONS}
+                      onChange={(name) => update({ colormap: name })}
+                    />
                   </Field>
                 )}
 
