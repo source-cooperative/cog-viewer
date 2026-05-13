@@ -52,7 +52,9 @@ export function extractGeoTiffSizeInputs(geotiff: GeoTIFF): NonTiledSizeInputs |
   // tag.value can be number[], Uint16Array, or Uint32Array. Normalize
   // to a plain array so tests can deep-equal.
   const stripByteCounts = Array.from(tag.value as ArrayLike<number>);
-  const bitsPerSample = geotiff.cachedTags.bitsPerSample[0] ?? 8;
+  if (stripByteCounts.length === 0) return null;
+  const raw = geotiff.cachedTags.bitsPerSample[0];
+  const bitsPerSample = raw && raw > 0 ? raw : 8;
   return {
     width: geotiff.width,
     height: geotiff.height,

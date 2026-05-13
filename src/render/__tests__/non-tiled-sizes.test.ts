@@ -115,4 +115,22 @@ describe("extractGeoTiffSizeInputs", () => {
       extractGeoTiffSizeInputs(stub as unknown as import("@developmentseed/geotiff").GeoTIFF),
     ).toBeNull();
   });
+
+  it("normalizes Uint32Array tag value into a plain array", () => {
+    const stub = {
+      width: 4,
+      height: 4,
+      count: 1,
+      cachedTags: { bitsPerSample: new Uint16Array([8]) },
+      image: {
+        tags: new Map<number, { count: number; value: unknown }>([
+          [TiffTag.StripByteCounts, { count: 2, value: Uint32Array.from([7, 11]) }],
+        ]),
+      },
+    };
+    const input = extractGeoTiffSizeInputs(
+      stub as unknown as import("@developmentseed/geotiff").GeoTIFF,
+    );
+    expect(input?.stripByteCounts).toEqual([7, 11]);
+  });
 });
