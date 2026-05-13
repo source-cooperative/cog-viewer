@@ -135,7 +135,7 @@ const HELP = {
   colormap:
     "Color lookup applied to the rescaled value (after the curve, before nodata).",
   nodata:
-    "Auto reads the nodata value from the COG's GDAL_NODATA tag; Value lets you specify one in source units; Off renders every pixel.",
+    "Auto reads the nodata value from the COG's GDAL_NODATA tag, and also treats NaN as nodata for float data (matches QGIS/GDAL); Value lets you specify one in source units; Off renders every pixel.",
   opacity: "Layer transparency, 0 (invisible) to 1 (fully opaque).",
   preset2to98:
     "2nd–98th percentile of pixel values. Ignores extreme outliers — the QGIS / rio-tiler default for most data.",

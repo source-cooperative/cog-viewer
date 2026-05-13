@@ -209,9 +209,27 @@ function buildRenderTile(
     // value normalized into the GPU's sample space (uint8 255 → 1.0 for
     // r8unorm).
     const nodata = effectiveNodata(state, data.nodata);
+    let explicitNodataModule: RasterModule | null = null;
     if (nodata !== null) {
-      const module = nodataModule(nodata, data.sampleScale);
-      if (module) pipeline.push(module);
+      explicitNodataModule = nodataModule(nodata, data.sampleScale);
+      if (explicitNodataModule) pipeline.push(explicitNodataModule);
+    }
+
+    // Implicit NaN-as-nodata for float COGs. IEEE-754 NaN is invalid by
+    // definition, and GDAL/QGIS treat it as transparent even when the file
+    // declares no GDAL_NODATA tag (e.g. Sentinel-2 derivatives that mask
+    // outside-swath pixels with NaN). Gated on float textures via sampleScale
+    // (r8unorm uint8 textures can't carry NaN), and skipped when the user
+    // explicitly set nodata to "off" or when FilterNaN is already in the
+    // pipeline (state.nodata was numerically NaN).
+    const isFloatTexture = data.sampleScale === 1;
+    const filterNaNAlreadyPushed = explicitNodataModule?.module === FilterNaN;
+    if (
+      isFloatTexture &&
+      state.nodata !== "off" &&
+      !filterNaNAlreadyPushed
+    ) {
+      pipeline.push({ module: FilterNaN });
     }
 
     const rescale = effectiveRescale(state, autoStats, requested);
