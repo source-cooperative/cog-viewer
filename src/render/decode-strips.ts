@@ -65,11 +65,14 @@ export async function decodeStrips(
   const { width, height, count: samplesPerPixel, cachedTags, nodata } = geotiff;
   const tags = geotiff.image.tags;
   const stripByteCounts = tags.get(TiffTag.StripByteCounts);
-  const rowsPerStripTag = tags.get(TiffTag.RowsPerStrip);
-  if (!stripByteCounts || !rowsPerStripTag) {
-    throw new Error("Stripped TIFF is missing StripByteCounts or RowsPerStrip");
+  if (!stripByteCounts) {
+    throw new Error("Stripped TIFF is missing StripByteCounts");
   }
-  const rowsPerStrip = Number(rowsPerStripTag.value);
+  // TIFF 6.0: when RowsPerStrip is absent the entire image is one strip.
+  const rowsPerStripTag = tags.get(TiffTag.RowsPerStrip);
+  const rowsPerStrip = rowsPerStripTag
+    ? Number(rowsPerStripTag.value)
+    : height;
   const stripCount = stripByteCounts.count;
 
   // Inline the upstream uniqueness check (`getUniqueSampleFormat` is
@@ -84,7 +87,7 @@ export async function decodeStrips(
   // can't reuse because it isn't re-exported. Rather than silently produce
   // wrong pixels for files with a non-None predictor (Horizontal=2 is
   // common with LZW/Deflate), fail loud and document the limitation.
-  if (cachedTags.predictor && cachedTags.predictor !== Predictor.None) {
+  if (cachedTags.predictor !== Predictor.None) {
     throw new Error(
       `Predictor ${cachedTags.predictor} is not supported for non-tiled GeoTIFFs. Convert with gdal_translate -of COG.`,
     );

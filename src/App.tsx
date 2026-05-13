@@ -166,6 +166,8 @@ export default function App() {
   // When a non-tiled GeoTIFF arrives, validate CRS + compute sizes + seed
   // status. Doing the CRS check here (rather than inside the loader
   // effect) lets us fail fast on non-4326 before decoding all strips.
+  // Also publishes bandCount + bandNames so the ControlsPanel + auto-mode
+  // effect can light up before the (potentially slow) strip decode runs.
   useEffect(() => {
     if (!geotiff) return;
     if (geotiff.isTiled) return;
@@ -183,6 +185,8 @@ export default function App() {
     }
     const sizes = computeNonTiledSizes(inputs);
     setNonTiledStatus(statusFromSizes(sizes));
+    setBandCount(geotiff.count);
+    setBandNames(readBandNames(geotiff));
   }, [geotiff]);
 
   // Run loadNonTiled when (a) we have a non-tiled geotiff, (b) the status
@@ -195,6 +199,10 @@ export default function App() {
     const ctrl = new AbortController();
     (async () => {
       try {
+        // TODO: this re-decodes every strip on band changes, which can take
+        // seconds for compressed multi-strip TIFFs. Caching decoded bands
+        // by [geotiff] and only re-uploading textures on band swap would
+        // keep band-toggle interactive.
         const raster = await loadNonTiled(geotiff, bands, device, ctrl.signal);
         if (ctrl.signal.aborted) return;
         setNonTiledRaster(raster);
@@ -208,7 +216,6 @@ export default function App() {
           ],
           { padding: 40, duration: 800 },
         );
-        setBandCount(geotiff.count);
       } catch (err) {
         if (!ctrl.signal.aborted) {
           console.error("loadNonTiled failed", err);
