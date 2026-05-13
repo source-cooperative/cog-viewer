@@ -155,6 +155,16 @@ Source layout:
 
 ## Known limitations
 
+- **Non-tiled GeoTIFFs load as a single image.** Stripped TIFFs decode
+  the whole file in the browser — no pyramid, no streaming — and gate
+  behind a 64 MB threshold (max of decoded and on-disk size). Under the
+  gate the image auto-loads with a banner; above it the banner offers
+  a **Load anyway** button showing both download and decoded sizes. For
+  best performance, convert to COG with
+  `gdal_translate -of COG in.tif out.tif`. Non-EPSG:4326 stripped TIFFs
+  aren't supported in this path — convert with `gdalwarp -t_srs EPSG:4326`
+  first. Files with non-None `Predictor` (e.g. LZW/Deflate + Horizontal)
+  are also rejected; the COG conversion fixes both.
 - **Bands cap at 4.** `CompositeBands` has 4 fixed shader slots, so the
   band picker hides bands 5+. For COGs like raw Sentinel-2 (13 bands), use
   a JP2-extracted subset or wait for a dynamic-cache extension.
