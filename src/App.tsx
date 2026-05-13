@@ -1,6 +1,7 @@
 import type { MapboxOverlayProps } from "@deck.gl/mapbox";
 import { MapboxOverlay } from "@deck.gl/mapbox";
 import { COGLayer } from "@developmentseed/deck.gl-geotiff";
+import { RasterLayer } from "@developmentseed/deck.gl-raster";
 import {
   createColormapTexture,
   decodeColormapSprite,
@@ -20,6 +21,7 @@ import { FullscreenButton } from "./components/FullscreenButton";
 import { NonTiledBanner } from "./components/NonTiledBanner";
 import { Toast, humanizeError } from "./components/Toast";
 import { loadNonTiled, type NonTiledRaster } from "./render/load-non-tiled";
+import { buildReprojectors, type ReprojectionFns } from "./render/reprojectors";
 import {
   computeNonTiledSizes,
   extractGeoTiffSizeInputs,
@@ -91,6 +93,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [nonTiledStatus, setNonTiledStatus] = useState<NonTiledStatus>(null);
   const [nonTiledRaster, setNonTiledRaster] = useState<NonTiledRaster | null>(null);
+  const [reprojectionFns, setReprojectionFns] = useState<ReprojectionFns | null>(null);
   // First symbol (label) layer id in the active basemap style. Used as
   // beforeId so the COG draws under labels when state.labelsAbove is true.
   // Undefined when the basemap has no labels (satellite / off).
@@ -123,6 +126,7 @@ export default function App() {
     setError(null);
     setNonTiledStatus(null);
     setNonTiledRaster(null);
+    setReprojectionFns(null);
     const url = state.url;
     if (!url) return;
     let cancelled = false;
@@ -186,12 +190,7 @@ export default function App() {
         const raster = await loadNonTiled(geotiff, bands, device, ctrl.signal);
         if (ctrl.signal.aborted) return;
         setNonTiledRaster(raster);
-        // Deviation from plan: `extractGeotiffReprojectors` isn't re-exported
-        // from `@developmentseed/deck.gl-geotiff` (only `.` is in its
-        // `exports` field), and its dependency `proj4` / raster-reproject
-        // aren't direct deps of this app either. Task 9 will resolve the
-        // import path (or add direct deps + a local wrapper) when the
-        // `RasterLayer` actually needs the fns.
+        setReprojectionFns(buildReprojectors(geotiff));
         // Trigger fitBounds for the non-tiled path (COGLayer's onGeoTIFFLoad
         // does this for tiled). Use the existing geotiff.bbox + transform.
         const bbox = geotiff.bbox;
@@ -247,51 +246,72 @@ export default function App() {
   }, [device]);
 
   const layer = useMemo(() => {
-    // Wait until we've constructed the GeoTIFF with our own chunk size. The
-    // URL-only fast path is intentionally gone — see the workaround comment
-    // above on why we hand a pre-built GeoTIFF instance to COGLayer.
     if (!geotiff) return null;
 
-    // Always mount the custom path (stable id "cog") so the tile cache
-    // survives every mode/band/rescale/colormap toggle. Single-band mode
+    // Build the renderTile callback once. Whether we wrap a tiled
+    // COGLayer (per-tile callback) or feed a single RasterLayer (one-shot
+    // pipeline), the inputs and outputs are identical. Single-band mode
     // additionally needs the colormap sprite uploaded to the device, so we
     // fall back to RGB rendering until that's ready.
-    const renderTile =
+    const buildRenderPipeline =
       state.mode === "single" && colormapTexture
         ? buildSingleCompositeRenderTile(state, colormapTexture, autoStats)
         : buildRgbCompositeRenderTile(state, autoStats);
 
-    // beforeId places the COG below the first symbol (label) layer so labels
-    // remain readable. Read by @deck.gl/mapbox's MapboxOverlay in interleaved
-    // mode but missing from COGLayer's narrower props type — extract to a
-    // const so structural assignability applies instead of the excess-property
-    // check.
-    const cogProps = {
-      id: "cog",
-      geotiff,
-      opacity: state.opacity,
-      getTileData,
-      renderTile,
-      beforeId: state.labelsAbove ? firstSymbolId : undefined,
-      onGeoTIFFLoad: (
-        tiff: GeoTIFF,
-        options: {
-          geographicBounds: { west: number; south: number; east: number; north: number };
+    if (geotiff.isTiled) {
+      // Existing tiled path (unchanged). beforeId places the COG below the
+      // first symbol (label) layer so labels remain readable. Read by
+      // @deck.gl/mapbox's MapboxOverlay in interleaved mode but missing from
+      // COGLayer's narrower props type — extract to a const so structural
+      // assignability applies instead of the excess-property check.
+      const cogProps = {
+        id: "cog",
+        geotiff,
+        opacity: state.opacity,
+        getTileData,
+        renderTile: buildRenderPipeline,
+        beforeId: state.labelsAbove ? firstSymbolId : undefined,
+        onGeoTIFFLoad: (
+          tiff: GeoTIFF,
+          options: {
+            geographicBounds: { west: number; south: number; east: number; north: number };
+          },
+        ) => {
+          setBandCount(tiff.count);
+          setBandNames(readBandNames(tiff));
+          const { west, south, east, north } = options.geographicBounds;
+          mapRef.current?.fitBounds(
+            [
+              [west, south],
+              [east, north],
+            ],
+            { padding: 40, duration: 800 },
+          );
         },
-      ) => {
-        setBandCount(tiff.count);
-        setBandNames(readBandNames(tiff));
-        const { west, south, east, north } = options.geographicBounds;
-        mapRef.current?.fitBounds(
-          [
-            [west, south],
-            [east, north],
-          ],
-          { padding: 40, duration: 800 },
-        );
-      },
+      };
+      return new COGLayer(cogProps);
+    }
+
+    // Non-tiled path: single RasterLayer, no tile cache.
+    if (!nonTiledRaster || !reprojectionFns) return null;
+    const result = buildRenderPipeline(nonTiledRaster.data);
+    const pipeline = "renderPipeline" in result ? result.renderPipeline : undefined;
+    if (!pipeline || pipeline.length === 0) return null;
+
+    // beforeId is read by @deck.gl/mapbox's MapboxOverlay in interleaved
+    // mode but missing from RasterLayer's narrower props type. Extract to
+    // a const so structural assignability applies instead of the
+    // excess-property check.
+    const rasterProps = {
+      id: "cog",
+      width: nonTiledRaster.width,
+      height: nonTiledRaster.height,
+      reprojectionFns,
+      renderPipeline: pipeline,
+      opacity: state.opacity,
+      beforeId: state.labelsAbove ? firstSymbolId : undefined,
     };
-    return new COGLayer(cogProps);
+    return new RasterLayer(rasterProps);
   }, [
     geotiff,
     state.opacity,
@@ -301,14 +321,14 @@ export default function App() {
     state.nodata,
     state.colormap,
     state.gamma,
+    state.stretch,
     state.labelsAbove,
     firstSymbolId,
     colormapTexture,
     bandNames,
     autoStats,
-    // Tracked so Task 9's non-tiled branch picks up new raster results
-    // when they resolve. The current path ignores `nonTiledRaster`.
     nonTiledRaster,
+    reprojectionFns,
   ]);
 
   // Apply the dark theme to <html> so portal-rendered children
