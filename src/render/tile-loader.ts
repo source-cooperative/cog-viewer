@@ -45,7 +45,7 @@ export type MultiBandTileData = {
  * shortly after eviction. Unfreed textures leak GPU memory; the registry
  * bounds the leak instead of eliminating it.
  */
-const tileFinalizer =
+export const tileFinalizer =
   typeof FinalizationRegistry !== "undefined"
     ? new FinalizationRegistry<Texture[]>((textures) => {
         for (const t of textures) {

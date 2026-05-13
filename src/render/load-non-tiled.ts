@@ -1,7 +1,11 @@
 import type { GeoTIFF, RasterTypedArray } from "@developmentseed/geotiff";
 import type { Device, Texture, TextureFormat } from "@luma.gl/core";
 import { decodeStrips } from "./decode-strips";
-import { MAX_BAND_SLOTS, type MultiBandTileData } from "./tile-loader";
+import {
+  MAX_BAND_SLOTS,
+  tileFinalizer,
+  type MultiBandTileData,
+} from "./tile-loader";
 
 const IDENTITY_UV: [number, number, number, number] = [0, 0, 1, 1];
 
@@ -55,7 +59,7 @@ export async function loadNonTiled(
     totalBytes += decoded.width * decoded.height * data.BYTES_PER_ELEMENT;
   }
 
-  return {
+  const result: NonTiledRaster = {
     data: {
       bands,
       width: decoded.width,
@@ -67,6 +71,16 @@ export async function loadNonTiled(
     width: decoded.width,
     height: decoded.height,
   };
+  // Match tile-loader.ts: best-effort GPU cleanup via FinalizationRegistry
+  // when the result is GC'd. RasterLayer doesn't expose an unload hook, so
+  // the registry bounds the leak rather than eliminating it.
+  if (tileFinalizer && bands.size > 0) {
+    tileFinalizer.register(
+      result,
+      Array.from(bands.values(), (v) => v.texture),
+    );
+  }
+  return result;
 }
 
 // Local copies of the format helpers from tile-loader.ts. Keeping them
