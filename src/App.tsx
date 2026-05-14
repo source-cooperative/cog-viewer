@@ -82,6 +82,13 @@ export default function App() {
   // beforeId so the COG draws under labels when state.labelsAbove is true.
   // Undefined when the basemap has no labels (satellite / off).
   const [firstSymbolId, setFirstSymbolId] = useState<string | undefined>();
+  // Drop the cached id whenever the basemap switches. It was read from the
+  // OLD style and the new style may not contain that layer — leaving it in
+  // place causes deck.gl's MapboxOverlay to throw "Cannot move layer ...
+  // before non-existing layer X" on the next styledata event.
+  useEffect(() => {
+    setFirstSymbolId(undefined);
+  }, [state.basemap]);
   // Tracks which URL the auto-mode effect has already fired for. Prevents a
   // late-arriving bandCount from clobbering an explicit user mode pick made
   // between the URL change and metadata load.
@@ -196,14 +203,19 @@ export default function App() {
     // remain readable. Read by @deck.gl/mapbox's MapboxOverlay in interleaved
     // mode but missing from COGLayer's narrower props type — extract to a
     // const so structural assignability applies instead of the excess-property
-    // check.
+    // check. Suppress for basemaps known to have no labels so we don't carry
+    // a stale id from the previous style into setStyle (see firstSymbolId
+    // reset effect above).
+    const labelsAvailable =
+      state.basemap !== "satellite" && state.basemap !== "off";
     const cogProps = {
       id: "cog",
       geotiff,
       opacity: state.opacity,
       getTileData,
       renderTile,
-      beforeId: state.labelsAbove ? firstSymbolId : undefined,
+      beforeId:
+        state.labelsAbove && labelsAvailable ? firstSymbolId : undefined,
       onGeoTIFFLoad: (
         tiff: GeoTIFF,
         options: {
@@ -233,6 +245,7 @@ export default function App() {
     state.colormap,
     state.gamma,
     state.labelsAbove,
+    state.basemap,
     firstSymbolId,
     colormapTexture,
     bandNames,
