@@ -6,7 +6,9 @@ import {
   decodeColormapSprite,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import colormapsPngUrl from "@developmentseed/deck.gl-raster/gpu-modules/colormaps.png";
+import { RasterLayer } from "@developmentseed/deck.gl-raster";
 import type { GeoTIFF } from "@developmentseed/geotiff";
+import type { ReprojectionFns } from "@developmentseed/raster-reproject";
 import type { Device, Texture } from "@luma.gl/core";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -14,6 +16,16 @@ import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
 import { isDarkChrome, resolveBasemap } from "./basemaps";
 import { loadGeoTIFF } from "./cog/load-geotiff";
+import {
+  readWholeImage,
+  tooLargeReason,
+  type WholeImage,
+} from "./cog/read-strips";
+import {
+  buildReprojectionFns,
+  geographicBounds,
+  resolveSourceProjection,
+} from "./cog/reproject";
 import { ControlsPanel } from "./components/ControlsPanel";
 import { EmptyState } from "./components/EmptyState";
 import { FullscreenButton } from "./components/FullscreenButton";
@@ -24,12 +36,15 @@ import {
 } from "./render/render-pipeline";
 import {
   computeAutoStats,
+  computeAutoStatsFromArrays,
   readBandNames,
   type AutoStats,
 } from "./render/stats";
 import {
+  buildWholeImageTileData,
   makeMultiBandTileLoader,
   MAX_BAND_SLOTS,
+  type MultiBandTileData,
 } from "./render/tile-loader";
 import { useCogState } from "./state/useCogState";
 
@@ -78,6 +93,18 @@ export default function App() {
   const [bandCount, setBandCount] = useState<number | null>(null);
   const [bandNames, setBandNames] = useState<Map<number, string> | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Non-tiled (stripped) TIFF whole-file render path. `@developmentseed/geotiff`
+  // can't read stripped images tile-by-tile, so these hold the whole-image
+  // bands (read via geotiff.js), the pixel↔WGS84 reprojection functions, the
+  // uploaded per-band GPU textures, and an info notice. All null for tiled COGs.
+  const [wholeImage, setWholeImage] = useState<WholeImage | null>(null);
+  const [reprojectionFns, setReprojectionFns] = useState<ReprojectionFns | null>(
+    null,
+  );
+  const [wholeImageData, setWholeImageData] = useState<MultiBandTileData | null>(
+    null,
+  );
+  const [notice, setNotice] = useState<string | null>(null);
   // First symbol (label) layer id in the active basemap style. Used as
   // beforeId so the COG draws under labels when state.labelsAbove is true.
   // Undefined when the basemap has no labels (satellite / off).
@@ -115,6 +142,10 @@ export default function App() {
     setBandCount(null);
     setBandNames(null);
     setError(null);
+    setWholeImage(null);
+    setReprojectionFns(null);
+    setWholeImageData(null);
+    setNotice(null);
     const url = state.url;
     if (!url) return;
     let cancelled = false;
@@ -134,9 +165,11 @@ export default function App() {
     };
   }, [state.url]);
 
-  // When we have a GeoTIFF for the current URL, compute auto-stats once.
+  // When we have a TILED GeoTIFF for the current URL, compute auto-stats once
+  // by sampling tiles. Stripped images can't be sampled via fetchTile; their
+  // stats are computed from the whole-image arrays in the non-tiled effect below.
   useEffect(() => {
-    if (!geotiff) return;
+    if (!geotiff || !geotiff.isTiled) return;
     const ctrl = new AbortController();
     (async () => {
       try {
@@ -150,6 +183,72 @@ export default function App() {
     })();
     return () => ctrl.abort();
   }, [geotiff]);
+
+  // Non-tiled (stripped) TIFF: read the whole file with geotiff.js, build the
+  // reprojection functions, fit the map to its bounds, and compute stats from
+  // the in-memory bands. Guarded by a size check against the already-loaded
+  // metadata so a huge stripped file is never downloaded.
+  // TODO(#573): retire once @developmentseed/geotiff can read stripped images.
+  useEffect(() => {
+    if (!geotiff || geotiff.isTiled) return;
+    const url = state.url;
+    if (!url) return;
+    const ctrl = new AbortController();
+    (async () => {
+      const reason = tooLargeReason(geotiff.width, geotiff.height, geotiff.count);
+      if (reason) {
+        setError(`Stripped TIFF can't be rendered: ${reason}.`);
+        return;
+      }
+      try {
+        const [image, sourceProjection] = await Promise.all([
+          readWholeImage(url, ctrl.signal),
+          resolveSourceProjection(geotiff),
+        ]);
+        if (ctrl.signal.aborted) return;
+        const fns = buildReprojectionFns(geotiff, sourceProjection);
+        const bounds = geographicBounds(geotiff, fns);
+        setWholeImage(image);
+        setReprojectionFns(fns);
+        setBandCount(geotiff.count);
+        setBandNames(readBandNames(geotiff));
+        setAutoStats(computeAutoStatsFromArrays(geotiff, image.bands));
+        setNotice("Stripped (non-tiled) TIFF — rendered in whole-file mode.");
+        mapRef.current?.fitBounds(
+          [
+            [bounds.west, bounds.south],
+            [bounds.east, bounds.north],
+          ],
+          { padding: 40, duration: 800 },
+        );
+      } catch (err) {
+        if (!ctrl.signal.aborted) {
+          console.error("non-tiled load failed", err);
+          setError(humanizeError(err));
+        }
+      }
+    })();
+    return () => ctrl.abort();
+  }, [geotiff, state.url]);
+
+  // Upload the whole-image bands as per-band GPU textures once the device and
+  // image are both ready. Stable across render-state changes (mode, rescale,
+  // colormap, …) so those re-render from cached textures without a re-read,
+  // mirroring the fixed FETCHED_BANDS tile-cache design.
+  useEffect(() => {
+    if (!device || !wholeImage) {
+      setWholeImageData(null);
+      return;
+    }
+    setWholeImageData(
+      buildWholeImageTileData(
+        device,
+        FETCHED_BANDS,
+        wholeImage,
+        geotiff?.nodata ?? null,
+      ),
+    );
+  }, [device, wholeImage, geotiff]);
 
   // After bandCount resolves for a URL, fire a one-shot auto-pick of mode +
   // bands when the user hasn't set them. The ref-guard prevents a late
@@ -190,32 +289,54 @@ export default function App() {
     // above on why we hand a pre-built GeoTIFF instance to COGLayer.
     if (!geotiff) return null;
 
-    // Always mount the custom path (stable id "cog") so the tile cache
-    // survives every mode/band/rescale/colormap toggle. Single-band mode
-    // additionally needs the colormap sprite uploaded to the device, so we
-    // fall back to RGB rendering until that's ready.
+    // The render pipeline is identical for tiled and non-tiled images — both
+    // produce a `{ renderPipeline }` whose CompositeBands references per-band
+    // textures. Single-band mode additionally needs the colormap sprite
+    // uploaded to the device, so we fall back to RGB rendering until ready.
     const renderTile =
       state.mode === "single" && colormapTexture
         ? buildSingleCompositeRenderTile(state, colormapTexture, autoStats)
         : buildRgbCompositeRenderTile(state, autoStats);
 
-    // beforeId places the COG below the first symbol (label) layer so labels
+    // beforeId places the raster below the first symbol (label) layer so labels
     // remain readable. Read by @deck.gl/mapbox's MapboxOverlay in interleaved
-    // mode but missing from COGLayer's narrower props type — extract to a
+    // mode but missing from the layers' narrower props types — extract to a
     // const so structural assignability applies instead of the excess-property
-    // check. Suppress for basemaps known to have no labels so we don't carry
+    // check. Suppressed for basemaps known to have no labels so we don't carry
     // a stale id from the previous style into setStyle (see firstSymbolId
     // reset effect above).
     const labelsAvailable =
       state.basemap !== "satellite" && state.basemap !== "off";
+    const beforeId =
+      state.labelsAbove && labelsAvailable ? firstSymbolId : undefined;
+
+    // Non-tiled (stripped) path: render the whole image as a single
+    // reprojected RasterLayer, reusing the exact same render pipeline. Waits
+    // for the uploaded textures and reprojection functions.
+    if (!geotiff.isTiled) {
+      if (!wholeImageData || !reprojectionFns) return null;
+      const { renderPipeline } = renderTile(wholeImageData);
+      const rasterProps = {
+        id: "cog",
+        width: wholeImageData.width,
+        height: wholeImageData.height,
+        reprojectionFns,
+        renderPipeline,
+        opacity: state.opacity,
+        beforeId,
+      };
+      return new RasterLayer(rasterProps);
+    }
+
+    // Tiled COG path: stable id "cog" so the tile cache survives every
+    // mode/band/rescale/colormap toggle.
     const cogProps = {
       id: "cog",
       geotiff,
       opacity: state.opacity,
       getTileData,
       renderTile,
-      beforeId:
-        state.labelsAbove && labelsAvailable ? firstSymbolId : undefined,
+      beforeId,
       onGeoTIFFLoad: (
         tiff: GeoTIFF,
         options: {
@@ -237,6 +358,8 @@ export default function App() {
     return new COGLayer(cogProps);
   }, [
     geotiff,
+    wholeImageData,
+    reprojectionFns,
     state.opacity,
     state.mode,
     state.bands,
@@ -291,6 +414,11 @@ export default function App() {
       />
 
       <Toast message={error} onDismiss={() => setError(null)} />
+      <Toast
+        message={notice}
+        variant="info"
+        onDismiss={() => setNotice(null)}
+      />
 
       <FullscreenButton />
 
