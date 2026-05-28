@@ -7,12 +7,15 @@ and decoded entirely in the browser.
 
 Built on [`@developmentseed/deck.gl-geotiff`][deck-gl-geotiff] and
 [`@developmentseed/deck.gl-raster`][deck-gl-raster] for tiled COG fetching
-and GPU-side rendering.
+and GPU-side rendering. Stripped (non-tiled) TIFFs — which that stack can't
+read tile-by-tile — fall back to a whole-file read via [`geotiff.js`][geotiffjs];
+see [Non-tiled TIFFs](#non-tiled-stripped-tiffs).
 
 [cog]: https://www.cogeo.org/
 [marblecutter]: https://github.com/sethfitz/marblecutter-virtual
 [deck-gl-geotiff]: https://github.com/developmentseed/deck.gl-raster/tree/main/packages/deck.gl-geotiff
 [deck-gl-raster]: https://github.com/developmentseed/deck.gl-raster/tree/main/packages/deck.gl-raster
+[geotiffjs]: https://github.com/geotiffjs/geotiff.js
 
 ## Usage
 
@@ -67,6 +70,35 @@ The first render after a URL load fetches once. Every subsequent control
 change — mode toggle, band swap, rescale, colormap pick, nodata, opacity,
 basemap, panel collapse — is GPU-only.
 
+### Non-tiled (stripped) TIFFs
+
+`@developmentseed/geotiff` only reads *tiled* images — `image.fetchTile()`
+expects `TileOffsets`, which stripped TIFFs don't have (its non-tiled
+`GeoTIFFLayer` is unexported and still a stub; see
+[deck.gl-raster#573][issue-573]). Some valid COGs are nonetheless stripped:
+small enough that GDAL writes a single strip and omits `TileWidth`/`TileLength`.
+
+When `tiff.isTiled` is false, the app branches to a whole-file path:
+
+1. **Read.** The entire file is fetched once and decoded with
+   [`geotiff.js`][geotiffjs] (`readRasters`, which handles stripped layouts),
+   yielding one typed array per band — see `src/cog/read-strips.ts`. A size
+   guard (max 8192 px/side, ~64M samples) rejects oversized files *before*
+   download, surfacing a message instead.
+2. **Reproject.** `src/cog/reproject.ts` builds the pixel↔CRS (affine
+   geotransform) and CRS↔WGS84 (proj4) functions that `RasterLayer` needs,
+   replicating the helper `deck.gl-geotiff` keeps internal.
+3. **Render.** Bands upload as the same per-band r-channel textures and feed
+   the **same** `renderTile` pipeline (composite → rescale → curve → gamma →
+   colormap → nodata) through `@developmentseed/deck.gl-raster`'s non-tiled
+   `RasterLayer`. All render controls work identically; reprojection runs on
+   the GPU via an adaptive mesh.
+
+A neutral toast notes when an image is rendered in this whole-file mode, and
+the metadata panel shows `Tiles: stripped (whole-file)`.
+
+[issue-573]: https://github.com/developmentseed/deck.gl-raster/issues/573
+
 ### Auto behavior
 
 - **Mode.** If no `?mode=` is set and the COG has fewer than 2 bands, the
@@ -75,14 +107,16 @@ basemap, panel collapse — is GPU-only.
 - **Rescale.** If no `?rescale=` is set, the app reads per-band
   `STATISTICS_MINIMUM` / `STATISTICS_MAXIMUM` from `GDAL_METADATA`. If
   those are absent it samples the coarsest overview's first tile and
-  computes per-band min/max. The result populates the Rescale form fields
+  computes per-band min/max (for stripped TIFFs, from the whole-image
+  arrays already in memory). The result populates the Rescale form fields
   (labeled "auto") and is averaged into a single global range for
   `LinearRescale`.
 - **Band names.** Per-band `<Item name="DESCRIPTION" sample="N">…</Item>`
   entries in `GDAL_METADATA` (and the `BAND_NAME` alias) become labels in
   the band picker — `1 — B04`, etc.
-- **Fit bounds.** First tile-pyramid metadata load triggers a one-shot
-  `fitBounds` to the COG's geographic extent.
+- **Fit bounds.** The first metadata load triggers a one-shot `fitBounds`
+  to the COG's geographic extent (derived from the reprojected bbox corners
+  on the stripped path).
 
 ## Develop
 
@@ -128,11 +162,14 @@ to "GitHub Actions". The workflow handles the rest.
 │  ┌──────────────────────────────────────────────────────┐   │
 │  │ MapLibre <Map>                                       │   │
 │  │  • basemap from resolveBasemap()                     │   │
-│  │  • <DeckGLOverlay layers=[COGLayer]>                 │   │
-│  │     custom getTileData → fetch tile, upload up to 4  │   │
-│  │       r-channel textures                             │   │
-│  │     custom renderTile → CompositeBands → LinearRescale │ │
-│  │       → Colormap? → FilterNoDataVal                  │   │
+│  │  • <DeckGLOverlay layers=[ tiled ? COGLayer          │   │
+│  │                            : RasterLayer ]>          │   │
+│  │     tiled:  getTileData → fetch tile, upload up to 4 │   │
+│  │             r-channel textures                       │   │
+│  │     strip:  read-strips → whole-file bands → same    │   │
+│  │             textures; reproject.ts → RasterLayer     │   │
+│  │     renderTile (shared) → CompositeBands →           │   │
+│  │       LinearRescale → Colormap? → FilterNoDataVal    │   │
 │  └──────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -141,13 +178,15 @@ Source layout:
 
 | Path                                 | Role                                                       |
 | ------------------------------------ | ---------------------------------------------------------- |
-| `src/App.tsx`                        | Map shell, layer construction, GeoTIFF lifecycle.          |
+| `src/App.tsx`                        | Map shell, tiled/non-tiled routing, GeoTIFF lifecycle.     |
 | `src/state/useCogState.ts`           | URL search-params hook (parse / serialize / subscribe).    |
-| `src/render/tile-loader.ts`          | `makeMultiBandTileLoader`: per-band r-channel textures.    |
-| `src/render/render-pipeline.ts`      | RGB and single-band `renderTile` builders.                 |
+| `src/render/tile-loader.ts`          | `buildMultiBandTileData` + tiled / whole-image loaders: per-band r-channel textures. |
+| `src/render/render-pipeline.ts`      | RGB and single-band `renderTile` builders (shared by both paths). |
 | `src/render/shader-modules.ts`       | Custom luma.gl modules: per-band rescale, log/sqrt stretch, gamma. |
-| `src/render/stats.ts`                | `readBandCount`, `readBandNames`, `computeAutoStats`.      |
+| `src/render/stats.ts`                | `readBandNames`, `computeAutoStats` (tiled), `computeAutoStatsFromArrays` (whole-image). |
 | `src/cog/load-geotiff.ts`            | CORS-safe `loadGeoTIFF()` with in-flight dedupe.           |
+| `src/cog/read-strips.ts`             | Whole-file reader (geotiff.js) for non-tiled TIFFs + size guard. |
+| `src/cog/reproject.ts`               | Pixel↔CRS↔WGS84 functions + geographic bounds for `RasterLayer`. |
 | `src/components/ControlsPanel.tsx`   | Options panel (basemap + render controls).                 |
 | `src/components/EmptyState.tsx`      | Paste / drop / examples landing card.                      |
 | `src/basemaps.ts`                    | `resolveBasemap()` — maps `Basemap` to a MapLibre style.   |
@@ -166,6 +205,13 @@ Source layout:
   shader module; deferred. Hillshade requires neighbor sampling on a
   single-band DEM; band-math needs either a fixed preset list (NDVI,
   NDWI, …) or a small expression DSL.
+- **Non-tiled TIFFs are size-capped and read whole.** Stripped images load
+  the entire file into memory and upload one full-resolution texture per
+  band, so they're limited to 8192 px/side (and ~64M samples); larger ones
+  show a message instead of rendering. Their geographic bounds come from the
+  four reprojected bbox corners, so `fitBounds` can be slightly off for
+  strongly curved projections. No overview pyramid exists, so there's no
+  level-of-detail — the full image is always drawn.
 
 ## Worked-around upstream bugs
 
@@ -178,6 +224,13 @@ Source layout:
   via a `CorsSafeSourceHttp` subclass that wipes the bogus
   `metadata.size` after the first 206 — see `src/cog/load-geotiff.ts`.
   Remove once the fix lands upstream.
+- **`@developmentseed/geotiff` can't read stripped / single-tile images.**
+  `fetchTile` is the only pixel-read path, so non-tiled TIFFs are handled
+  out-of-band: read whole with `geotiff.js` and rendered via `RasterLayer`
+  with locally rebuilt reprojection functions (`src/cog/read-strips.ts`,
+  `src/cog/reproject.ts`). Tracked upstream as
+  [deck.gl-raster#573][issue-573]; retire this path and route stripped
+  images through the normal `fetchTile` + `COGLayer` flow once it lands.
 
 ## Design + plan documents
 
