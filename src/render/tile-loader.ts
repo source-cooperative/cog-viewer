@@ -5,7 +5,7 @@ import type {
   RasterArray,
   RasterTypedArray,
 } from "@developmentseed/geotiff";
-import type { Device, Texture, TextureFormat } from "@luma.gl/core";
+import type { Texture, TextureFormat } from "@luma.gl/core";
 
 /** Mirrors `MAX_BAND_SLOTS` in deck.gl-raster's `composite-bands.ts`, which
  * isn't re-exported from the package entry. The CompositeBands shader has
@@ -102,70 +102,6 @@ function extractBand(
   return out;
 }
 
-/** Dimensions + nodata describing the raster that {@link buildMultiBandTileData}
- * pulls bands from. `count` is the total band count for bounds-checking. */
-type RasterMeta = {
-  count: number;
-  width: number;
-  height: number;
-  nodata: number | null;
-};
-
-/**
- * Upload each band in `bandIndexes` (1-indexed) as its own r-channel texture,
- * producing the {@link MultiBandTileData} the render pipeline consumes. Bands
- * are pulled lazily via `getBand` (0-indexed) so callers only decode/extract
- * the bands actually requested. Indexes beyond `meta.count` are skipped.
- *
- * Shared by the tiled path ({@link makeMultiBandTileLoader}) and the whole-file
- * path ({@link buildWholeImageTileData}); both differ only in where bands come
- * from.
- */
-export function buildMultiBandTileData(
-  device: Device,
-  bandIndexes: number[],
-  meta: RasterMeta,
-  getBand: (bandIndex0: number) => RasterTypedArray,
-): MultiBandTileData {
-  const bands = new Map<string, { texture: Texture; uvTransform: UvTransform }>();
-  let totalBytes = 0;
-  let sampleScale = 1;
-  for (const idx of bandIndexes) {
-    const i = idx - 1;
-    if (i < 0 || i >= meta.count) continue;
-    const bandData = getBand(i);
-    const format = singleBandFormat(bandData);
-    const data = coerceForFormat(bandData, format);
-    sampleScale = sampleScaleForFormat(format);
-    const texture = device.createTexture({
-      data,
-      format,
-      width: meta.width,
-      height: meta.height,
-    });
-    bands.set(String(idx), { texture, uvTransform: IDENTITY_UV });
-    // Use the *post-coercion* per-element byte size so deck.gl's tile cache
-    // budget reflects the actual buffer allocated. coerceForFormat upcasts
-    // int16/uint16 to Float32 (4 bytes).
-    totalBytes += meta.width * meta.height * data.BYTES_PER_ELEMENT;
-  }
-  const result: MultiBandTileData = {
-    bands,
-    width: meta.width,
-    height: meta.height,
-    byteLength: totalBytes,
-    nodata: meta.nodata,
-    sampleScale,
-  };
-  if (tileFinalizer && bands.size > 0) {
-    tileFinalizer.register(
-      result,
-      Array.from(bands.values(), (v) => v.texture),
-    );
-  }
-  return result;
-}
-
 /**
  * Build a getTileData callback that fetches the COG tile once and uploads
  * each band in `bandIndexes` (1-indexed) as its own r-channel texture.
@@ -184,44 +120,48 @@ export function makeMultiBandTileLoader(bandIndexes: number[]) {
     const { device, x, y, signal } = options;
     const tile = await image.fetchTile(x, y, { signal, boundless: false });
     const array: RasterArray = tile.array;
-    return buildMultiBandTileData(
-      device,
-      bandIndexes,
-      {
-        count: array.count,
-        width: array.width,
-        height: array.height,
-        nodata: array.nodata,
-      },
-      (i) =>
+    const bands = new Map<
+      string,
+      { texture: Texture; uvTransform: UvTransform }
+    >();
+    let totalBytes = 0;
+    let sampleScale = 1;
+    for (const idx of bandIndexes) {
+      const i = idx - 1;
+      if (i < 0 || i >= array.count) continue;
+      const bandData: RasterTypedArray =
         array.layout === "band-separate"
           ? array.bands[i]
-          : extractBand(array.data as RasterTypedArray, i, array.count),
-    );
+          : extractBand(array.data as RasterTypedArray, i, array.count);
+      const format = singleBandFormat(bandData);
+      const data = coerceForFormat(bandData, format);
+      sampleScale = sampleScaleForFormat(format);
+      const texture = device.createTexture({
+        data,
+        format,
+        width: array.width,
+        height: array.height,
+      });
+      bands.set(String(idx), { texture, uvTransform: IDENTITY_UV });
+      // Use the *post-coercion* per-element byte size so deck.gl's tile
+      // cache budget reflects the actual buffer allocated. coerceForFormat
+      // upcasts int16/uint16 to Float32 (4 bytes).
+      totalBytes += array.width * array.height * data.BYTES_PER_ELEMENT;
+    }
+    const result: MultiBandTileData = {
+      bands,
+      width: array.width,
+      height: array.height,
+      byteLength: totalBytes,
+      nodata: array.nodata,
+      sampleScale,
+    };
+    if (tileFinalizer && bands.size > 0) {
+      tileFinalizer.register(
+        result,
+        Array.from(bands.values(), (v) => v.texture),
+      );
+    }
+    return result;
   };
-}
-
-/**
- * Whole-image counterpart to {@link makeMultiBandTileLoader}: build a single
- * {@link MultiBandTileData} from band-separate arrays already read into memory
- * (see {@link file://../cog/read-strips.ts}). Used for non-tiled TIFFs, which
- * are rendered as one full-resolution image rather than a tile pyramid.
- */
-export function buildWholeImageTileData(
-  device: Device,
-  bandIndexes: number[],
-  image: { width: number; height: number; bandCount: number; bands: RasterTypedArray[] },
-  nodata: number | null,
-): MultiBandTileData {
-  return buildMultiBandTileData(
-    device,
-    bandIndexes,
-    {
-      count: image.bandCount,
-      width: image.width,
-      height: image.height,
-      nodata,
-    },
-    (i) => image.bands[i],
-  );
 }

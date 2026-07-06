@@ -26,9 +26,6 @@ importers:
       '@deck.gl/mapbox':
         specifier: ^9.3.2
         version: 9.3.2(@deck.gl/core@9.3.2)(@luma.gl/core@9.3.3)(@math.gl/web-mercator@4.1.0)
-      '@developmentseed/affine':
-        specifier: ^0.6.1
-        version: 0.6.1
       '@developmentseed/deck.gl-geotiff':
         specifier: ^0.6.1
         version: 0.6.1(71285630fbe21754b1ea3701085edd16)
@@ -38,24 +35,12 @@ importers:
       '@developmentseed/geotiff':
         specifier: ^0.6.1
         version: 0.6.1
-      '@developmentseed/proj':
-        specifier: ^0.6.1
-        version: 0.6.1
-      '@developmentseed/raster-reproject':
-        specifier: ^0.6.1
-        version: 0.6.1
       '@luma.gl/core':
         specifier: ^9.3.3
         version: 9.3.3
-      geotiff:
-        specifier: ^3.0.5
-        version: 3.0.5
       maplibre-gl:
         specifier: ^5.24.0
         version: 5.24.0
-      proj4:
-        specifier: ^2.20.8
-        version: 2.20.8
       react:
         specifier: ^19.2.4
         version: 19.2.6
@@ -502,9 +487,6 @@ packages:
 
   '@oxc-project/types@0.129.0':
     resolution: {integrity: sha512-3oz8m3FGdr2nDXVqmFUw7jolKliC4MoyXYIG2c7gpjBnzUWQpUGIYcXYKxTdTi+N2jusvt610ckTMkxdwHkYEg==}
-
-  '@petamoriken/float16@3.9.3':
-    resolution: {integrity: sha512-8awtpHXCx/bNpFt4mt2xdkgtgVvKqty8VbjHI/WWWQuEw+KLzFot3f4+LkQY9YmOtq7A5GdOnqoIC8Pdygjk2g==}
 
   '@probe.gl/env@4.1.1':
     resolution: {integrity: sha512-+68seNDMVsEegRB47pFA/Ws1Fjy8agcFYXxzorKToyPcD6zd+gZ5uhwoLd7TzsSw6Ydns//2KEszWn+EnNHTbA==}
@@ -1007,10 +989,6 @@ packages:
   fzstd@0.1.1:
     resolution: {integrity: sha512-dkuVSOKKwh3eas5VkJy1AW1vFpet8TA/fGmVA5krThl8YcOVE/8ZIoEA1+U1vEn5ckxxhLirSdY837azmbaNHA==}
 
-  geotiff@3.0.5:
-    resolution: {integrity: sha512-OWcL9S9+yDZ6iAlXMt32T1iwUApJM8UiD47xbm6ZP1h33d10fqkPs14EG/ttT5EnefpZSx3G15iDFC5FxUNUwA==}
-    engines: {node: '>=10.19'}
-
   get-value@2.0.6:
     resolution: {integrity: sha512-Ln0UQDlxH1BapMu3GPtf7CuYNwRZf2gwCuPqbyG6pB8WfmFpzqcy4xtAaAMUhnNqjMKTiCPZG2oMT3YSx8U2NA==}
     engines: {node: '>=0.10.0'}
@@ -1106,9 +1084,6 @@ packages:
 
   ktx-parse@0.7.1:
     resolution: {integrity: sha512-FeA3g56ksdFNwjXJJsc1CCc7co+AJYDp6ipIp878zZ2bU8kWROatLYf39TQEd4/XRSUvBXovQ8gaVKWPXsCLEQ==}
-
-  lerc@3.0.0:
-    resolution: {integrity: sha512-Rm4J/WaHhRa93nCN2mwWDZFoRVF18G1f47C+kvQWyHGEZxFpTUi73p7lMVSAndyxGt6lJ2/CFbOcf9ra5p8aww==}
 
   lerc@4.1.1:
     resolution: {integrity: sha512-rgMqdHK4+gIUnF80OkWyfRae2u1B96BT8ZAjbLB4xfxIdfCHQ9GOf17haZVCag+5X9WC+40hLNZPbwctFs2FPQ==}
@@ -1251,12 +1226,6 @@ packages:
   pako@1.0.11:
     resolution: {integrity: sha512-4hLB8Py4zZce5s4yd9XzopqwVv/yGNhV1Bl8NTmCq1763HeK2+EwVTv+leGeL13Dnh2wfbqowVPXCIO0z4taYw==}
 
-  pako@2.1.0:
-    resolution: {integrity: sha512-w+eufiZ1WuJYgPXbV/PO3NCMEc3xqylkKHzp8bxp1uW4qaSNQUkwmLLEc3kKsfz8lpV1F8Ht3U1Cm+9Srog2ug==}
-
-  parse-headers@2.0.6:
-    resolution: {integrity: sha512-Tz11t3uKztEW5FEVZnj1ox8GKblWn+PvHY9TmJV5Mll2uHEwRdR/5Li1OlXoECjLYkApdhWy44ocONwXLiKO5A==}
-
   parse5@8.0.1:
     resolution: {integrity: sha512-z1e/HMG90obSGeidlli3hj7cbocou0/wa5HacvI3ASx34PecNjNQeaHNo5WIZpWofN9kgkqV1q5YvXe3F0FoPw==}
 
@@ -1305,10 +1274,6 @@ packages:
   punycode@2.3.1:
     resolution: {integrity: sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg==}
     engines: {node: '>=6'}
-
-  quick-lru@6.1.2:
-    resolution: {integrity: sha512-AAFUA5O1d83pIHEhJwWCq/RQcRukCkn/NSm2QsTEMle5f2hP0ChI2+3Xb051PZCkLryI/Ir1MVKviT2FIloaTQ==}
-    engines: {node: '>=12'}
 
   quickselect@3.0.0:
     resolution: {integrity: sha512-XdjUArbK4Bm5fLLvlm5KpTFOiOThgfWWI4axAZDWg4E/0mKdZyI9tNEfds27qCi1ze/vwTR16kvmmGhRra3c2g==}
@@ -1600,9 +1565,6 @@ packages:
     resolution: {integrity: sha512-o8qghlI8NZHU1lLPrpi2+Uq7abh4GGPpYANlalzWxyWteJOCsr/P+oPBA49TOLu5FTZO4d3F9MnWJfiMo4BkmA==}
     engines: {node: '>=18'}
 
-  web-worker@1.5.0:
-    resolution: {integrity: sha512-RiMReJrTAiA+mBjGONMnjVDP2u3p9R1vkcGz6gDIrOMT3oGuYwX2WRMYI9ipkphSuE5XKEhydbhNEJh4NY9mlw==}
-
   webidl-conversions@8.0.1:
     resolution: {integrity: sha512-BMhLD/Sw+GbJC21C/UgyaZX41nPt8bUTg+jWyDeg7e7YN4xOM05YPSIXceACnXVtqyEw/LMClUQMtMZ+PGGpqQ==}
     engines: {node: '>=20'}
@@ -1635,17 +1597,11 @@ packages:
     resolution: {integrity: sha512-k8KO9hrMyNk6tUWqUfkTEZbezRRpONVOzUTnc97VnCvyj6Tf9lyUR9EDAIeiVLv56jsMcoXEwjW8Kv5yPY52lw==}
     engines: {node: '>=16.0.0'}
 
-  xml-utils@1.10.2:
-    resolution: {integrity: sha512-RqM+2o1RYs6T8+3DzDSoTRAUfrvaejbVHcp3+thnAtDKo8LskR+HomLajEy5UjTz24rpka7AxVBRR3g2wTUkJA==}
-
   xmlchars@2.2.0:
     resolution: {integrity: sha512-JZnDKK8B0RCDw84FNdDAIpZK+JuJw+s7Lz8nksI7SIuU3UXJJslUthsi+uWBUYOwPFwW7W7PRLRfUKpxjtjFCw==}
 
   zstd-codec@0.1.5:
     resolution: {integrity: sha512-v3fyjpK8S/dpY/X5WxqTK3IoCnp/ZOLxn144GZVlNUjtwAchzrVo03h+oMATFhCIiJ5KTr4V3vDQQYz4RU684g==}
-
-  zstddec@0.2.0:
-    resolution: {integrity: sha512-oyPnDa1X5c13+Y7mA/FDMNJrn4S8UNBe0KCqtDmor40Re7ALrPN6npFwyYVRRh+PqozZQdeg23QtbcamZnG5rA==}
 
 snapshots:
 
@@ -2267,8 +2223,6 @@ snapshots:
 
   '@oxc-project/types@0.129.0': {}
 
-  '@petamoriken/float16@3.9.3': {}
-
   '@probe.gl/env@4.1.1': {}
 
   '@probe.gl/log@4.1.1':
@@ -2709,17 +2663,6 @@ snapshots:
 
   fzstd@0.1.1: {}
 
-  geotiff@3.0.5:
-    dependencies:
-      '@petamoriken/float16': 3.9.3
-      lerc: 3.0.0
-      pako: 2.1.0
-      parse-headers: 2.0.6
-      quick-lru: 6.1.2
-      web-worker: 1.5.0
-      xml-utils: 1.10.2
-      zstddec: 0.2.0
-
   get-value@2.0.6: {}
 
   gl-matrix@3.4.4: {}
@@ -2808,8 +2751,6 @@ snapshots:
   kdbush@4.0.2: {}
 
   ktx-parse@0.7.1: {}
-
-  lerc@3.0.0: {}
 
   lerc@4.1.1: {}
 
@@ -2929,10 +2870,6 @@ snapshots:
 
   pako@1.0.11: {}
 
-  pako@2.1.0: {}
-
-  parse-headers@2.0.6: {}
-
   parse5@8.0.1:
     dependencies:
       entities: 8.0.0
@@ -2978,8 +2915,6 @@ snapshots:
   protocol-buffers-schema@3.6.1: {}
 
   punycode@2.3.1: {}
-
-  quick-lru@6.1.2: {}
 
   quickselect@3.0.0: {}
 
@@ -3220,8 +3155,6 @@ snapshots:
     dependencies:
       xml-name-validator: 5.0.0
 
-  web-worker@1.5.0: {}
-
   webidl-conversions@8.0.1: {}
 
   whatwg-mimetype@5.0.0: {}
@@ -3247,11 +3180,7 @@ snapshots:
 
   xml-naming@0.1.0: {}
 
-  xml-utils@1.10.2: {}
-
   xmlchars@2.2.0: {}
 
   zstd-codec@0.1.5:
     optional: true
-
-  zstddec@0.2.0: {}

@@ -93,7 +93,7 @@ function ImageRows({ s }: { s: MetadataSummary }) {
           "Tiles",
           im.isTiled
             ? `${im.tileWidth} × ${im.tileHeight}, ${im.planarConfig}`
-            : `stripped (whole-file), ${im.planarConfig}`,
+            : `stripped (not supported), ${im.planarConfig}`,
         ],
         ["Nodata", im.nodata === null ? "—" : String(im.nodata)],
       ]}

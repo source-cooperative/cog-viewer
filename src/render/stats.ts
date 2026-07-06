@@ -1,10 +1,5 @@
 import { TiffTag } from "@cogeotiff/core";
-import type {
-  GeoTIFF,
-  Overview,
-  RasterArray,
-  RasterTypedArray,
-} from "@developmentseed/geotiff";
+import type { GeoTIFF, Overview, RasterArray } from "@developmentseed/geotiff";
 
 /**
  * Parse band descriptions from the GDAL_METADATA XML tag. Looks for
@@ -372,71 +367,5 @@ export async function computeAutoStats(
   const sampled = await fromSampledTiles(tiff, signal, priors, onProgress);
   if (sampled.perBand) return sampled;
   // Last-resort fallback: GDAL stats without histograms.
-  return fromGdalMetadata(tiff);
-}
-
-/**
- * Compute per-band min/max + histogram directly from whole-image band arrays
- * already in memory. The non-tiled counterpart to {@link batchFromTiles}:
- * `fetchTile` only works on tiled images, so stripped TIFFs (read whole via
- * geotiff.js — see {@link file://../cog/read-strips.ts}) compute stats here
- * instead. Pure and synchronous; the whole image is already resident.
- *
- * When `priors` carries an author-supplied range for a band, it anchors that
- * band's bin edges (matching {@link streamingFromTiles}); otherwise min/max is
- * scanned from the samples.
- */
-export function computeStatsFromArrays(
-  bands: RasterTypedArray[],
-  nodata: number | null,
-  priors: ReadonlyMap<number, { min: number; max: number }> | null,
-): AutoStats {
-  const perBand = new Map<number, BandStats>();
-  for (let b = 0; b < bands.length; b++) {
-    const data = bands[b];
-    const prior = priors?.get(b + 1);
-    let min: number;
-    let max: number;
-    if (prior) {
-      min = prior.min;
-      max = prior.max;
-    } else {
-      min = Number.POSITIVE_INFINITY;
-      max = Number.NEGATIVE_INFINITY;
-      let any = false;
-      for (let i = 0; i < data.length; i++) {
-        const v = data[i] as number;
-        if (nodata !== null && v === nodata) continue;
-        if (!Number.isFinite(v)) continue;
-        if (v < min) min = v;
-        if (v > max) max = v;
-        any = true;
-      }
-      if (!any || !(min < max)) continue;
-    }
-    const histogram = buildHistogram(
-      (function* () {
-        for (let i = 0; i < data.length; i++) yield data[i] as number;
-      })(),
-      min,
-      max,
-      nodata,
-    );
-    perBand.set(b + 1, { min, max, histogram });
-  }
-  if (perBand.size === 0) return NULL_STATS;
-  return { perBand, global: averageStats([...perBand.values()]) };
-}
-
-/**
- * Auto-stats for a non-tiled image: reuses the GeoTIFF's GDAL priors (for bin
- * anchoring) and nodata, computing histograms from the in-memory band arrays.
- */
-export function computeAutoStatsFromArrays(
-  tiff: GeoTIFF,
-  bands: RasterTypedArray[],
-): AutoStats {
-  const stats = computeStatsFromArrays(bands, tiff.nodata, readGdalRanges(tiff));
-  if (stats.perBand) return stats;
   return fromGdalMetadata(tiff);
 }

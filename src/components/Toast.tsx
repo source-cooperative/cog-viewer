@@ -1,26 +1,20 @@
 type Props = {
   message: string | null;
   onDismiss: () => void;
-  /** "error" (default) is a red alert; "info" is a neutral status notice used
-   * for non-blocking notices like the non-tiled whole-file-mode banner. */
-  variant?: "error" | "info";
 };
 
-export function Toast({ message, onDismiss, variant = "error" }: Props) {
+export function Toast({ message, onDismiss }: Props) {
   if (!message) return null;
-  const isInfo = variant === "info";
   return (
     <div
-      role={isInfo ? "status" : "alert"}
+      role="alert"
       className="panel"
       style={{
         position: "absolute",
-        // Offset the info notice so it doesn't sit on top of an error toast
-        // in the rare case both are visible.
-        bottom: isInfo ? 72 : 24,
+        bottom: 24,
         left: "50%",
         transform: "translateX(-50%)",
-        background: isInfo ? "#1e3a5f" : "#7a1a1a",
+        background: "#7a1a1a",
         color: "#ffffff",
         padding: "10px 14px",
         borderRadius: "var(--radius)",
