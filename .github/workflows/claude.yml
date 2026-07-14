@@ -32,11 +32,26 @@ jobs:
         with:
           fetch-depth: 1
 
+      # Pre-install dependencies so node_modules (including the upstream
+      # @developmentseed/deck.gl-geotiff / deck.gl-raster source) is present for
+      # Claude to inspect, and so builds/tests can run without network approval.
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Run Claude Code
         id: claude
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: |
-            --allowedTools "Bash(git checkout:*),Bash(git switch:*),Bash(git branch:*),Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(gh pr create:*),Bash(gh pr view:*),Bash(gh issue view:*)"
+            --allowedTools "Bash(git checkout:*),Bash(git switch:*),Bash(git branch:*),Bash(git add:*),Bash(git commit:*),Bash(git push:*),Bash(git fetch:*),Bash(pnpm install:*),Bash(pnpm build:*),Bash(pnpm test:*),Bash(pnpm run:*),Bash(pnpm exec:*),Bash(npx:*),Bash(gh pr create:*),Bash(gh pr view:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh issue view:*),Bash(gh api:*),WebFetch"
             --append-system-prompt "When the request requires code modifications: (1) create a new branch off the default branch named `claude/fix-<short-description>` or `claude/issue-<number>`, (2) make the changes, commit, and push the branch, (3) if `.github/pull_request_template.md` exists, read it and fill each section (removing the HTML comment instructions) and add `Closes #<n>` if resolving an issue, otherwise write a concise summary; write the body to a temp file and run `gh pr create --body-file <path>`, (4) reply in the original thread with the PR link. For read-only questions, skip the PR workflow and just respond."
