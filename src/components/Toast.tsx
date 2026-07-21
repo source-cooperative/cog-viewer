@@ -55,9 +55,21 @@ export function humanizeError(err: unknown): string {
   if (
     lower.includes("not a tiff") ||
     lower.includes("invalid tiff") ||
-    lower.includes("unrecognized")
+    lower.includes("unrecognized") ||
+    // @cogeotiff/core throws "Only tiff supported version:<n>" when the bytes
+    // aren't a TIFF at all (e.g. a Parquet file, whose header parses to a
+    // nonsense version number).
+    lower.includes("supported version") ||
+    lower.includes("only tiff")
   ) {
     return "This file does not look like a valid Cloud Optimized GeoTIFF.";
+  }
+  if (
+    lower.includes("coordinate transformation") ||
+    lower.includes("geotiff model type") ||
+    lower.includes("projection name")
+  ) {
+    return "This COG uses a map projection this viewer can't display. Only common projections are supported.";
   }
   if (lower.includes("404") || lower.includes("not found")) {
     return "The COG URL returned 404 Not Found.";

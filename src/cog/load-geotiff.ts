@@ -2,6 +2,7 @@ import { SourceCache, SourceChunk } from "@chunkd/middleware";
 import { SourceView } from "@chunkd/source";
 import { SourceHttp } from "@chunkd/source-http";
 import { GeoTIFF } from "@developmentseed/geotiff";
+import { applyCrsRescue } from "./crs-rescue";
 
 /**
  * COG access pattern is hundreds of distinct Range requests against the
@@ -102,10 +103,22 @@ export function loadGeoTIFF(url: string): Promise<GeoTIFF> {
       new SourceChunk({ size: CHUNK_SIZE }),
       new SourceCache({ size: CACHE_SIZE }),
     ]);
-    return await GeoTIFF.open({
+    const tiff = await GeoTIFF.open({
       dataSource: source,
       headerSource: view,
     });
+    // `crs` is a lazy getter that throws for projections @developmentseed/geotiff
+    // can't parse. Force it now, inside this try, so the error surfaces to the
+    // caller's catch instead of later during React render — where it would be
+    // uncaught (the metadata panel reads `.crs` synchronously) and blank the app.
+    // If it's a projection we can rescue (e.g. Cylindrical Equal Area), seed a
+    // working CRS so the COG still renders; otherwise rethrow for a clear message.
+    try {
+      void tiff.crs;
+    } catch (err) {
+      if (!applyCrsRescue(tiff)) throw err;
+    }
+    return tiff;
   })();
 
   inflight.set(url, promise);

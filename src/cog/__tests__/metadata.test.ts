@@ -7,6 +7,8 @@ import {
   TiffTag,
 } from "@cogeotiff/core";
 import { describe, expect, it } from "vitest";
+import type { GeoTIFF } from "@developmentseed/geotiff";
+import { applyCrsRescue } from "../crs-rescue";
 import {
   compressionLabel,
   crsLabel,
@@ -247,6 +249,27 @@ describe("summarizeGeoTIFF", () => {
     );
     expect(summary.crs.code).toBeNull();
     expect(summary.crs.label).toBe("User-defined: Custom Lambert");
+  });
+
+  it("degrades to an 'unknown' label when the crs getter throws", () => {
+    const tiff = makeFakeGeoTIFF({});
+    Object.defineProperty(tiff, "crs", {
+      get() {
+        throw new Error("Unsupported coordinate transformation type: 99");
+      },
+    });
+    expect(() => summarizeGeoTIFF(tiff)).not.toThrow();
+    expect(summarizeGeoTIFF(tiff).crs.label).toBe("unknown");
+  });
+
+  it("shows the rescued projection name for sentinel CRS codes", () => {
+    // Register a Cylindrical Equal Area rescue and reuse its sentinel code.
+    const rescued = { gkd: { projMethod: 28, citation: "World CEA" } } as unknown as GeoTIFF;
+    applyCrsRescue(rescued);
+    const code = (rescued as unknown as { _crs?: number })._crs as number;
+    const summary = summarizeGeoTIFF(makeFakeGeoTIFF({ crs: code }));
+    expect(summary.crs.code).toBeNull();
+    expect(summary.crs.label).toBe("World CEA");
   });
 
   it("returns an empty overviews list when none are present", () => {
