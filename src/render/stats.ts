@@ -1,9 +1,5 @@
 import { TiffTag } from "@cogeotiff/core";
-import type {
-  GeoTIFF,
-  Overview,
-  RasterArray,
-} from "@developmentseed/geotiff";
+import type { GeoTIFF, Overview, RasterArray } from "@developmentseed/geotiff";
 
 /**
  * Parse band descriptions from the GDAL_METADATA XML tag. Looks for

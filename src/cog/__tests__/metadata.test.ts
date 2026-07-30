@@ -158,6 +158,7 @@ function makeFakeGeoTIFF(opts: {
   overviews?: number;
   crs?: number | { name: string };
   citation?: string | null;
+  isTiled?: boolean;
 }) {
   const gdalXml = opts.gdalXml ?? null;
   const overviewCount = opts.overviews ?? 0;
@@ -168,6 +169,7 @@ function makeFakeGeoTIFF(opts: {
     tileHeight: 256,
     tileCount: { x: 2 >> i || 1, y: 2 >> i || 1 },
   }));
+  const isTiled = opts.isTiled ?? true;
   return {
     image: {
       value: (tag: number) =>
@@ -176,8 +178,18 @@ function makeFakeGeoTIFF(opts: {
     width: 1024,
     height: 1024,
     count: opts.count ?? 3,
-    tileWidth: 256,
-    tileHeight: 256,
+    isTiled,
+    // A real stripped GeoTIFF throws (or returns junk) from the tileSize getter;
+    // summarizeGeoTIFF must not read these when !isTiled. Make the getters throw
+    // so a regression that reads them unguarded fails loudly.
+    get tileWidth(): number {
+      if (!isTiled) throw new Error("tileSize read on stripped image");
+      return 256;
+    },
+    get tileHeight(): number {
+      if (!isTiled) throw new Error("tileSize read on stripped image");
+      return 256;
+    },
     nodata: -9999,
     crs: opts.crs ?? 3857,
     bbox: [-180, -85, 180, 85] as [number, number, number, number],
@@ -263,5 +275,21 @@ describe("summarizeGeoTIFF", () => {
       tileWidth: 256,
       tileHeight: 256,
     });
+  });
+
+  it("reports tile dimensions for a tiled image", () => {
+    const summary = summarizeGeoTIFF(makeFakeGeoTIFF({ isTiled: true }));
+    expect(summary.image.isTiled).toBe(true);
+    expect(summary.image.tileWidth).toBe(256);
+    expect(summary.image.tileHeight).toBe(256);
+  });
+
+  it("flags a stripped image and zeroes tile dims without reading tileSize", () => {
+    // makeFakeGeoTIFF's tileWidth/tileHeight getters throw when !isTiled, so
+    // this passing proves summarizeGeoTIFF never touches them for stripped TIFFs.
+    const summary = summarizeGeoTIFF(makeFakeGeoTIFF({ isTiled: false }));
+    expect(summary.image.isTiled).toBe(false);
+    expect(summary.image.tileWidth).toBe(0);
+    expect(summary.image.tileHeight).toBe(0);
   });
 });

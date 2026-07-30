@@ -7,7 +7,8 @@ and decoded entirely in the browser.
 
 Built on [`@developmentseed/deck.gl-geotiff`][deck-gl-geotiff] and
 [`@developmentseed/deck.gl-raster`][deck-gl-raster] for tiled COG fetching
-and GPU-side rendering.
+and GPU-side rendering. Stripped (non-tiled) TIFFs aren't supported yet —
+see [Non-tiled TIFFs](#non-tiled-stripped-tiffs).
 
 [cog]: https://www.cogeo.org/
 [marblecutter]: https://github.com/sethfitz/marblecutter-virtual
@@ -67,6 +68,26 @@ The first render after a URL load fetches once. Every subsequent control
 change — mode toggle, band swap, rescale, colormap pick, nodata, opacity,
 basemap, panel collapse — is GPU-only.
 
+### Non-tiled (stripped) TIFFs
+
+`@developmentseed/geotiff` only reads *tiled* images — `image.fetchTile()`
+expects `TileOffsets`, which a stripped image doesn't have (its non-tiled
+`GeoTIFFLayer` is unexported and still a stub; see
+[deck.gl-raster#573][issue-573]). A TIFF is *stripped* when GDAL records its
+pixel byte offsets under the `StripOffsets`/`StripByteCounts` tags instead of
+`TileOffsets`/`TileByteCounts` — a distinct on-disk layout from a small
+*tiled* image that happens to fit in a single tile.
+
+cog-viewer checks `tiff.isTiled` after loading a COG's metadata and, when
+false, shows an error toast explaining the file can't be displayed instead
+of attempting to render it; the metadata panel reports
+`Tiles: stripped (not supported)`. Support is tracked in
+[issue #5][issue-5], pending either `@developmentseed/geotiff` reading
+stripped layouts directly or [deck.gl-raster#573][issue-573] landing.
+
+[issue-573]: https://github.com/developmentseed/deck.gl-raster/issues/573
+[issue-5]: https://github.com/source-cooperative/cog-viewer/issues/5
+
 ### Auto behavior
 
 - **Mode.** If no `?mode=` is set and the COG has fewer than 2 bands, the
@@ -81,8 +102,8 @@ basemap, panel collapse — is GPU-only.
 - **Band names.** Per-band `<Item name="DESCRIPTION" sample="N">…</Item>`
   entries in `GDAL_METADATA` (and the `BAND_NAME` alias) become labels in
   the band picker — `1 — B04`, etc.
-- **Fit bounds.** First tile-pyramid metadata load triggers a one-shot
-  `fitBounds` to the COG's geographic extent.
+- **Fit bounds.** The first metadata load triggers a one-shot `fitBounds`
+  to the COG's geographic extent.
 
 ## Develop
 
@@ -146,7 +167,7 @@ Source layout:
 | `src/render/tile-loader.ts`          | `makeMultiBandTileLoader`: per-band r-channel textures.    |
 | `src/render/render-pipeline.ts`      | RGB and single-band `renderTile` builders.                 |
 | `src/render/shader-modules.ts`       | Custom luma.gl modules: per-band rescale, log/sqrt stretch, gamma. |
-| `src/render/stats.ts`                | `readBandCount`, `readBandNames`, `computeAutoStats`.      |
+| `src/render/stats.ts`                | `readBandNames`, `computeAutoStats`.                       |
 | `src/cog/load-geotiff.ts`            | CORS-safe `loadGeoTIFF()` with in-flight dedupe.           |
 | `src/components/ControlsPanel.tsx`   | Options panel (basemap + render controls).                 |
 | `src/components/EmptyState.tsx`      | Paste / drop / examples landing card.                      |
@@ -166,6 +187,8 @@ Source layout:
   shader module; deferred. Hillshade requires neighbor sampling on a
   single-band DEM; band-math needs either a fixed preset list (NDVI,
   NDWI, …) or a small expression DSL.
+- **Non-tiled (stripped) TIFFs aren't rendered.** See
+  [Non-tiled TIFFs](#non-tiled-stripped-tiffs).
 
 ## Worked-around upstream bugs
 

@@ -22,15 +22,8 @@ import {
   buildRgbCompositeRenderTile,
   buildSingleCompositeRenderTile,
 } from "./render/render-pipeline";
-import {
-  computeAutoStats,
-  readBandNames,
-  type AutoStats,
-} from "./render/stats";
-import {
-  makeMultiBandTileLoader,
-  MAX_BAND_SLOTS,
-} from "./render/tile-loader";
+import { computeAutoStats, readBandNames, type AutoStats } from "./render/stats";
+import { makeMultiBandTileLoader, MAX_BAND_SLOTS } from "./render/tile-loader";
 import { useCogState } from "./state/useCogState";
 
 const darkMql = window.matchMedia("(prefers-color-scheme: dark)");
@@ -134,9 +127,11 @@ export default function App() {
     };
   }, [state.url]);
 
-  // When we have a GeoTIFF for the current URL, compute auto-stats once.
+  // When we have a TILED GeoTIFF for the current URL, compute auto-stats once
+  // by sampling tiles. Stripped images can't be sampled via fetchTile, so
+  // they're skipped — see the isTiled effect below.
   useEffect(() => {
-    if (!geotiff) return;
+    if (!geotiff || !geotiff.isTiled) return;
     const ctrl = new AbortController();
     (async () => {
       try {
@@ -149,6 +144,19 @@ export default function App() {
       }
     })();
     return () => ctrl.abort();
+  }, [geotiff]);
+
+  // Non-tiled (stripped) TIFF: `@developmentseed/geotiff` can only read tiled
+  // images (`fetchTile` expects TileOffsets), so the viewer doesn't attempt
+  // to render these — just surfaces an explanatory error instead.
+  // TODO(#573): render stripped images once @developmentseed/geotiff can
+  // read them, or once deck.gl-raster's non-tiled GeoTIFFLayer ships.
+  useEffect(() => {
+    if (!geotiff || geotiff.isTiled) return;
+    setError(
+      "This TIFF is stripped (non-tiled) and can't be displayed. See " +
+        "https://github.com/source-cooperative/cog-viewer/issues/5.",
+    );
   }, [geotiff]);
 
   // After bandCount resolves for a URL, fire a one-shot auto-pick of mode +
@@ -190,10 +198,12 @@ export default function App() {
     // above on why we hand a pre-built GeoTIFF instance to COGLayer.
     if (!geotiff) return null;
 
-    // Always mount the custom path (stable id "cog") so the tile cache
-    // survives every mode/band/rescale/colormap toggle. Single-band mode
-    // additionally needs the colormap sprite uploaded to the device, so we
-    // fall back to RGB rendering until that's ready.
+    // Non-tiled (stripped) TIFFs can't be read by `@developmentseed/geotiff`
+    // (see the isTiled effect above, which surfaces an error toast instead).
+    if (!geotiff.isTiled) return null;
+
+    // Single-band mode additionally needs the colormap sprite uploaded to
+    // the device, so we fall back to RGB rendering until that's ready.
     const renderTile =
       state.mode === "single" && colormapTexture
         ? buildSingleCompositeRenderTile(state, colormapTexture, autoStats)
@@ -208,6 +218,8 @@ export default function App() {
     // reset effect above).
     const labelsAvailable =
       state.basemap !== "satellite" && state.basemap !== "off";
+    // Stable id "cog" so the tile cache survives every mode/band/rescale/
+    // colormap toggle.
     const cogProps = {
       id: "cog",
       geotiff,

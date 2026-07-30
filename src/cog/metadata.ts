@@ -50,6 +50,12 @@ export type ImageSummary = {
   compression: string;
   predictor: string | null;
   planarConfig: string;
+  /** Whether the primary image is internally tiled. Stripped (non-tiled)
+   * TIFFs can't be read by `@developmentseed/geotiff` (tile-only); cog-viewer
+   * routes them through a whole-file render path instead. */
+  isTiled: boolean;
+  /** Tile dimensions in pixels. Both 0 for stripped images, where the
+   * underlying `tileSize` getter is meaningless (and may throw). */
   tileWidth: number;
   tileHeight: number;
   nodata: number | null;
@@ -302,6 +308,7 @@ type MetadataInput = Pick<
   | "width"
   | "height"
   | "count"
+  | "isTiled"
   | "tileWidth"
   | "tileHeight"
   | "nodata"
@@ -320,6 +327,7 @@ export function summarizeGeoTIFF(tiff: MetadataInput): MetadataSummary {
   const cached = tiff.cachedTags;
   const sampleFormat = cached.sampleFormat?.[0] ?? null;
   const bits = cached.bitsPerSample?.[0] ?? null;
+  const isTiled = tiff.isTiled;
 
   const rawXml =
     (tiff.image.value(TiffTag.GdalMetadata) as string | undefined) ?? null;
@@ -392,8 +400,11 @@ export function summarizeGeoTIFF(tiff: MetadataInput): MetadataSummary {
       compression: compressionLabel(cached.compression),
       predictor: predictorLabel(cached.predictor),
       planarConfig: planarConfigLabel(cached.planarConfiguration),
-      tileWidth: tiff.tileWidth,
-      tileHeight: tiff.tileHeight,
+      isTiled,
+      // Reading tileSize on a stripped image is meaningless and can throw, so
+      // only touch the getters when the image is actually tiled.
+      tileWidth: isTiled ? tiff.tileWidth : 0,
+      tileHeight: isTiled ? tiff.tileHeight : 0,
       nodata: tiff.nodata,
     },
     crs: {

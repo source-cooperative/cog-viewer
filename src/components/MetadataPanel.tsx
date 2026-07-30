@@ -89,7 +89,12 @@ function ImageRows({ s }: { s: MetadataSummary }) {
         ["Type", im.dtype],
         ["Compression", compression],
         ["Photometric", im.photometric],
-        ["Tiles", `${im.tileWidth} × ${im.tileHeight}, ${im.planarConfig}`],
+        [
+          "Tiles",
+          im.isTiled
+            ? `${im.tileWidth} × ${im.tileHeight}, ${im.planarConfig}`
+            : `stripped (not supported), ${im.planarConfig}`,
+        ],
         ["Nodata", im.nodata === null ? "—" : String(im.nodata)],
       ]}
     />
