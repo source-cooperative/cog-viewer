@@ -12,6 +12,11 @@ dist
 dist-ssr
 *.local
 
+# Local env overrides; .env.example is committed as the template.
+.env
+.env.*
+!.env.example
+
 # Editor
 .vscode/*
 !.vscode/extensions.json
