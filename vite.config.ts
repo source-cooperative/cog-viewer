@@ -5,8 +5,8 @@ import { sentryVitePlugin } from "@sentry/vite-plugin";
 // Upload source maps to Sentry only when an auth token is present (CI). Local
 // `pnpm build` skips upload, and the plugin deletes the emitted `.map` files
 // after upload so they aren't published to the public GitHub Pages site. The
-// `/cog-viewer/` base path needs no special handling — the plugin matches maps
-// by injected debug IDs, not URL paths.
+// base path needs no special handling — the plugin matches maps by injected
+// debug IDs, not URL paths.
 const sentrySourceMaps = process.env.SENTRY_AUTH_TOKEN
   ? [
       sentryVitePlugin({
@@ -20,10 +20,11 @@ const sentrySourceMaps = process.env.SENTRY_AUTH_TOKEN
     ]
   : [];
 
-export default defineConfig(({ command }) => ({
-  // Production builds are served from https://<org>.github.io/cog-viewer/
-  // by the GitHub Pages deploy. The dev server still mounts at /.
-  base: command === "build" ? "/cog-viewer/" : "/",
+export default defineConfig({
+  // GitHub Pages serves this repo under /cog-viewer/, so deploy.yml sets
+  // BASE_PATH. Every other host — dev server, `vite preview`, Cloudflare Pages
+  // PR previews — serves from the root.
+  base: process.env.BASE_PATH ?? "/",
   // Emit source maps so Sentry can de-minify production stack traces; the
   // sentry plugin deletes them from dist after upload (see sentrySourceMaps).
   build: { sourcemap: true },
@@ -34,4 +35,4 @@ export default defineConfig(({ command }) => ({
     globals: true,
     setupFiles: ["./src/test-setup.ts"],
   },
-}));
+});
