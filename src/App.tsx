@@ -14,6 +14,7 @@ import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
 import { isDarkChrome, resolveBasemap } from "./basemaps";
 import { loadGeoTIFF } from "./cog/load-geotiff";
+import { validateCog } from "./cog/validate";
 import { ControlsPanel } from "./components/ControlsPanel";
 import { EmptyState } from "./components/EmptyState";
 import { FullscreenButton } from "./components/FullscreenButton";
@@ -30,6 +31,7 @@ import {
 import {
   makeMultiBandTileLoader,
   MAX_BAND_SLOTS,
+  setTileErrorHandler,
 } from "./render/tile-loader";
 import { useCogState } from "./state/useCogState";
 
@@ -78,6 +80,9 @@ export default function App() {
   const [bandCount, setBandCount] = useState<number | null>(null);
   const [bandNames, setBandNames] = useState<Map<number, string> | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Non-blocking notice (e.g. a COG with no overviews) — rendered as an amber
+  // Toast alongside the red error one; the two are mutually exclusive per load.
+  const [warning, setWarning] = useState<string | null>(null);
   // First symbol (label) layer id in the active basemap style. Used as
   // beforeId so the COG draws under labels when state.labelsAbove is true.
   // Undefined when the basemap has no labels (satellite / off).
@@ -115,13 +120,25 @@ export default function App() {
     setBandCount(null);
     setBandNames(null);
     setError(null);
+    setWarning(null);
     const url = state.url;
     if (!url) return;
     let cancelled = false;
     (async () => {
       try {
         const tiff = await loadGeoTIFF(url);
-        if (!cancelled) setGeotiff(tiff);
+        if (cancelled) return;
+        // The file may open as a valid TIFF yet not be a renderable COG (e.g.
+        // striped/non-tiled). Reject those up front with a clear message —
+        // otherwise every fetchTile call throws and deck.gl swallows it,
+        // leaving a blank map. See cog/validate.ts.
+        const issue = validateCog(tiff);
+        if (issue?.level === "error") {
+          setError(issue.message);
+          return;
+        }
+        if (issue?.level === "warning") setWarning(issue.message);
+        setGeotiff(tiff);
       } catch (err) {
         if (!cancelled) {
           console.error("loadGeoTIFF failed", err);
@@ -133,6 +150,17 @@ export default function App() {
       cancelled = true;
     };
   }, [state.url]);
+
+  // Surface tile fetch/decode failures (which deck.gl otherwise swallows) as a
+  // user-facing error. Registered once; the handler reads setError, which is
+  // stable across renders. We don't clobber an already-shown error so a burst
+  // of failing tiles yields one message, not a flicker.
+  useEffect(() => {
+    setTileErrorHandler((err) => {
+      setError((prev) => prev ?? humanizeError(err));
+    });
+    return () => setTileErrorHandler(null);
+  }, []);
 
   // When we have a GeoTIFF for the current URL, compute auto-stats once.
   useEffect(() => {
@@ -291,6 +319,12 @@ export default function App() {
       />
 
       <Toast message={error} onDismiss={() => setError(null)} />
+
+      <Toast
+        message={warning}
+        level="warning"
+        onDismiss={() => setWarning(null)}
+      />
 
       <FullscreenButton />
 
