@@ -97,9 +97,10 @@ deploy to any static host.
 ## Deploy
 
 `.github/workflows/deploy.yml` publishes to GitHub Pages on every push
-to `main` (`https://source-cooperative.github.io/cog-viewer/`). The
-production build sets `base: /cog-viewer/`; the dev server still mounts
-at `/`.
+to `main` (`https://source-cooperative.github.io/cog-viewer/`). Because
+Pages serves the site under a repo subpath, the workflow sets `BASE_PATH`
+and Vite uses it as `base`. Any other host — the dev server, `vite
+preview`, Cloudflare Pages PR previews — leaves it unset and gets `/`.
 
 To enable: in **Settings → Pages**, set "Build and deployment → Source"
 to "GitHub Actions". The workflow handles the rest.
