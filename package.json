@@ -2,6 +2,7 @@
   "name": "cog-viewer",
   "private": true,
   "version": "0.0.0",
+  "license": "Apache-2.0",
   "type": "module",
   "packageManager": "pnpm@10.33.4",
   "scripts": {
@@ -23,12 +24,14 @@
     "@developmentseed/geotiff": "^0.6.1",
     "@developmentseed/proj": "^0.6.1",
     "@luma.gl/core": "^9.3.3",
+    "@sentry/react": "^10.69.0",
     "maplibre-gl": "^5.24.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-map-gl": "^8.1.1"
   },
   "devDependencies": {
+    "@sentry/vite-plugin": "^5.4.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
@@ -40,5 +43,10 @@
     "typescript": "^5.7.0",
     "vite": "^8.0.0",
     "vitest": "^4.1.5"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@sentry/cli"
+    ]
   }
 }
