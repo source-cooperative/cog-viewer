@@ -34,6 +34,9 @@ jobs:
 
       - run: pnpm build
         env:
+          # GitHub Pages serves the site at /<repo>/. Other hosts (Cloudflare
+          # Pages previews, `vite preview`) leave this unset and get `/`.
+          BASE_PATH: /${{ github.event.repository.name }}/
           # Sentry error monitoring. DSN is public (write-only) so it's a repo
           # variable; the auth token (source-map upload) is a secret. Upload is
           # skipped automatically if SENTRY_AUTH_TOKEN is unset (see vite.config).
