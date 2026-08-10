@@ -19,6 +19,7 @@ import { ControlsPanel } from "./components/ControlsPanel";
 import { EmptyState } from "./components/EmptyState";
 import { FullscreenButton } from "./components/FullscreenButton";
 import { Toast, humanizeError } from "./components/Toast";
+import { isValidGeographicBounds } from "./geo/bounds";
 import {
   buildRgbCompositeRenderTile,
   buildSingleCompositeRenderTile,
@@ -252,6 +253,18 @@ export default function App() {
       ) => {
         setBandCount(tiff.count);
         setBandNames(readBandNames(tiff));
+        if (!isValidGeographicBounds(options.geographicBounds)) {
+          // A COG's declared CRS may be missing, unrecognized, or otherwise
+          // fail to reproject cleanly to WGS84 — that yields NaN/Infinity or
+          // raw projected-CRS values instead of real lng/lat. Feeding those
+          // into fitBounds throws an uncaught "Invalid LngLat" deep inside
+          // maplibre-gl, so bail out with a clear message instead.
+          setError(
+            "Could not determine this COG's geographic extent — its " +
+              "coordinate reference system may be missing or unsupported.",
+          );
+          return;
+        }
         const { west, south, east, north } = options.geographicBounds;
         mapRef.current?.fitBounds(
           [
