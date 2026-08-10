@@ -294,6 +294,22 @@ export function crsLabel(crs: number | { name?: string } | null | undefined): {
   return { code: null, label: "unknown" };
 }
 
+/** `tiff.crs` is a getter that parses the GeoKeyDirectory lazily, and throws
+ * for a `ModelTypeGeoKey` this library doesn't recognize (e.g. `32767`,
+ * "user-defined" per the GeoTIFF spec, seen in the wild on files whose model
+ * type doesn't fit the projected/geographic split). Catch that so one
+ * unrecognized geokey doesn't take down the whole metadata panel. */
+function safeCrsLabel(tiff: Pick<MetadataInput, "crs" | "gkd">): {
+  code: number | null;
+  label: string;
+} {
+  try {
+    return crsLabel(tiff.crs as never);
+  } catch {
+    return { code: null, label: `Unsupported (model type ${tiff.gkd.modelType ?? "unknown"})` };
+  }
+}
+
 /** Structural subset of `GeoTIFF` we read from. Lets tests construct stubs
  * without instantiating the whole class. The real `GeoTIFF` satisfies this. */
 type MetadataInput = Pick<
@@ -362,7 +378,7 @@ export function summarizeGeoTIFF(tiff: MetadataInput): MetadataSummary {
     });
   }
 
-  const { code, label } = crsLabel(tiff.crs as never);
+  const { code, label } = safeCrsLabel(tiff);
   const gkd = tiff.gkd;
   const citation =
     gkd.citation || gkd.projectedCitation || gkd.geodeticCitation || null;

@@ -158,6 +158,10 @@ function makeFakeGeoTIFF(opts: {
   overviews?: number;
   crs?: number | { name: string };
   citation?: string | null;
+  /** Simulates `@developmentseed/geotiff`'s `crs` getter throwing on a
+   * `ModelTypeGeoKey` it doesn't recognize (e.g. `32767`, "user-defined"). */
+  crsThrows?: boolean;
+  modelType?: number | null;
 }) {
   const gdalXml = opts.gdalXml ?? null;
   const overviewCount = opts.overviews ?? 0;
@@ -168,7 +172,7 @@ function makeFakeGeoTIFF(opts: {
     tileHeight: 256,
     tileCount: { x: 2 >> i || 1, y: 2 >> i || 1 },
   }));
-  return {
+  const fake: Record<string, unknown> = {
     image: {
       value: (tag: number) =>
         tag === TiffTag.GdalMetadata ? gdalXml ?? undefined : undefined,
@@ -179,7 +183,6 @@ function makeFakeGeoTIFF(opts: {
     tileWidth: 256,
     tileHeight: 256,
     nodata: -9999,
-    crs: opts.crs ?? 3857,
     bbox: [-180, -85, 180, 85] as [number, number, number, number],
     cachedTags: {
       compression: Compression.Deflate,
@@ -194,12 +197,24 @@ function makeFakeGeoTIFF(opts: {
       citation: opts.citation ?? null,
       projectedCitation: null,
       geodeticCitation: null,
+      modelType: opts.modelType ?? null,
     },
     offsets: [0, 0, 0],
     scales: [1, 1, 1],
     storedStats: null,
     overviews,
-  } as unknown as Parameters<typeof summarizeGeoTIFF>[0];
+  };
+  if (opts.crsThrows) {
+    Object.defineProperty(fake, "crs", {
+      enumerable: true,
+      get(): never {
+        throw new Error(`Unsupported GeoTIFF model type: ${opts.modelType ?? 32767}`);
+      },
+    });
+  } else {
+    fake.crs = opts.crs ?? 3857;
+  }
+  return fake as unknown as Parameters<typeof summarizeGeoTIFF>[0];
 }
 
 describe("summarizeGeoTIFF", () => {
@@ -247,6 +262,17 @@ describe("summarizeGeoTIFF", () => {
     );
     expect(summary.crs.code).toBeNull();
     expect(summary.crs.label).toBe("User-defined: Custom Lambert");
+  });
+
+  it("falls back to a placeholder label instead of throwing on an unrecognized model type", () => {
+    const summary = summarizeGeoTIFF(
+      makeFakeGeoTIFF({ crsThrows: true, modelType: 32767 }),
+    );
+    expect(summary.crs.code).toBeNull();
+    expect(summary.crs.label).toBe("Unsupported (model type 32767)");
+    // The rest of the summary still comes through.
+    expect(summary.image.width).toBe(1024);
+    expect(summary.bands).toHaveLength(3);
   });
 
   it("returns an empty overviews list when none are present", () => {
