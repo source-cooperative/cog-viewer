@@ -15,10 +15,13 @@ import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
 import { isDarkChrome, resolveBasemap } from "./basemaps";
 import { rescuingEpsgResolver } from "./cog/crs-rescue";
 import { loadGeoTIFF } from "./cog/load-geotiff";
+import { validateCog } from "./cog/validate";
 import { ControlsPanel } from "./components/ControlsPanel";
 import { EmptyState } from "./components/EmptyState";
 import { FullscreenButton } from "./components/FullscreenButton";
 import { Toast, humanizeError } from "./components/Toast";
+import { isValidGeographicBounds } from "./geo/bounds";
+import { selectOverlayLayers } from "./geo/overlay-layers";
 import {
   buildRgbCompositeRenderTile,
   buildSingleCompositeRenderTile,
@@ -31,6 +34,7 @@ import {
 import {
   makeMultiBandTileLoader,
   MAX_BAND_SLOTS,
+  setTileErrorHandler,
 } from "./render/tile-loader";
 import { useCogState } from "./state/useCogState";
 
@@ -79,6 +83,14 @@ export default function App() {
   const [bandCount, setBandCount] = useState<number | null>(null);
   const [bandNames, setBandNames] = useState<Map<number, string> | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // False when the COG's geographic extent couldn't be determined (unresolved
+  // or unsupported CRS). Gates the tile layer off so we don't paint mislocated
+  // tiles alongside the "could not determine geographic extent" error — the
+  // tile-placement path clamps coordinates and would otherwise draw anyway.
+  const [extentValid, setExtentValid] = useState(true);
+  // Non-blocking notice (e.g. a COG with no overviews) — rendered as an amber
+  // Toast alongside the red error one; the two are mutually exclusive per load.
+  const [warning, setWarning] = useState<string | null>(null);
   // First symbol (label) layer id in the active basemap style. Used as
   // beforeId so the COG draws under labels when state.labelsAbove is true.
   // Undefined when the basemap has no labels (satellite / off).
@@ -116,13 +128,26 @@ export default function App() {
     setBandCount(null);
     setBandNames(null);
     setError(null);
+    setWarning(null);
+    setExtentValid(true);
     const url = state.url;
     if (!url) return;
     let cancelled = false;
     (async () => {
       try {
         const tiff = await loadGeoTIFF(url);
-        if (!cancelled) setGeotiff(tiff);
+        if (cancelled) return;
+        // The file may open as a valid TIFF yet not be a renderable COG (e.g.
+        // striped/non-tiled). Reject those up front with a clear message —
+        // otherwise every fetchTile call throws and deck.gl swallows it,
+        // leaving a blank map. See cog/validate.ts.
+        const issue = validateCog(tiff);
+        if (issue?.level === "error") {
+          setError(issue.message);
+          return;
+        }
+        if (issue?.level === "warning") setWarning(issue.message);
+        setGeotiff(tiff);
       } catch (err) {
         if (!cancelled) {
           console.error("loadGeoTIFF failed", err);
@@ -134,6 +159,17 @@ export default function App() {
       cancelled = true;
     };
   }, [state.url]);
+
+  // Surface tile fetch/decode failures (which deck.gl otherwise swallows) as a
+  // user-facing error. Registered once; the handler reads setError, which is
+  // stable across renders. We don't clobber an already-shown error so a burst
+  // of failing tiles yields one message, not a flicker.
+  useEffect(() => {
+    setTileErrorHandler((err) => {
+      setError((prev) => prev ?? humanizeError(err));
+    });
+    return () => setTileErrorHandler(null);
+  }, []);
 
   // When we have a GeoTIFF for the current URL, compute auto-stats once.
   useEffect(() => {
@@ -229,6 +265,22 @@ export default function App() {
       ) => {
         setBandCount(tiff.count);
         setBandNames(readBandNames(tiff));
+        if (!isValidGeographicBounds(options.geographicBounds)) {
+          // A COG's declared CRS may be missing, unrecognized, or otherwise
+          // fail to reproject cleanly to WGS84 — that yields NaN/Infinity or
+          // raw projected-CRS values instead of real lng/lat. Feeding those
+          // into fitBounds throws an uncaught "Invalid LngLat" deep inside
+          // maplibre-gl, so bail out with a clear message instead. Also drop
+          // the tile layer (via extentValid) so we don't paint mislocated
+          // tiles under that error — the library's tile-placement path clamps
+          // coordinates and would otherwise keep drawing.
+          setError(
+            "Could not determine this COG's geographic extent — its " +
+              "coordinate reference system may be missing or unsupported.",
+          );
+          setExtentValid(false);
+          return;
+        }
         const { west, south, east, north } = options.geographicBounds;
         mapRef.current?.fitBounds(
           [
@@ -280,7 +332,7 @@ export default function App() {
         }}
       >
         <DeckGLOverlay
-          layers={layer ? [layer] : []}
+          layers={selectOverlayLayers(layer, extentValid)}
           interleaved
           onDeviceInitialized={setDevice}
         />
@@ -296,6 +348,12 @@ export default function App() {
       />
 
       <Toast message={error} onDismiss={() => setError(null)} />
+
+      <Toast
+        message={warning}
+        level="warning"
+        onDismiss={() => setWarning(null)}
+      />
 
       <FullscreenButton />
 

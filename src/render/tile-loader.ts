@@ -17,6 +17,27 @@ export const MAX_BAND_SLOTS = 4;
 type UvTransform = [number, number, number, number];
 const IDENTITY_UV: UvTransform = [0, 0, 1, 1];
 
+/**
+ * Module-level reporter for tile fetch/decode failures. `getTileData` is
+ * created once at module scope (App keeps its identity stable so deck.gl's
+ * TileLayer doesn't invalidate its cache), so it can't close over React's
+ * `setError`. Instead the app registers a handler here — mirroring the
+ * module-scope `SourceHttp.fetch` override in load-geotiff.ts.
+ *
+ * Without this, a COG that opens fine but fails per-tile (unsupported
+ * compression, corrupt tiles, a non-tiled TIFF that slipped past validation)
+ * shows a blank map with no explanation: the rejection is swallowed by deck.gl.
+ */
+let tileErrorHandler: ((err: unknown) => void) | null = null;
+export function setTileErrorHandler(fn: ((err: unknown) => void) | null): void {
+  tileErrorHandler = fn;
+}
+
+/** AbortErrors are normal — deck.gl cancels in-flight tiles on pan/zoom. */
+function isAbortError(err: unknown): boolean {
+  return err instanceof DOMException && err.name === "AbortError";
+}
+
 export type MultiBandTileData = {
   /** One r-channel texture per fetched band, keyed by 1-based band index
    * as a string so it can flow into `buildCompositeBandsProps`. */
@@ -118,50 +139,59 @@ export function makeMultiBandTileLoader(bandIndexes: number[]) {
     options: GetTileDataOptions,
   ): Promise<MultiBandTileData> {
     const { device, x, y, signal } = options;
-    const tile = await image.fetchTile(x, y, { signal, boundless: false });
-    const array: RasterArray = tile.array;
-    const bands = new Map<
-      string,
-      { texture: Texture; uvTransform: UvTransform }
-    >();
-    let totalBytes = 0;
-    let sampleScale = 1;
-    for (const idx of bandIndexes) {
-      const i = idx - 1;
-      if (i < 0 || i >= array.count) continue;
-      const bandData: RasterTypedArray =
-        array.layout === "band-separate"
-          ? array.bands[i]
-          : extractBand(array.data as RasterTypedArray, i, array.count);
-      const format = singleBandFormat(bandData);
-      const data = coerceForFormat(bandData, format);
-      sampleScale = sampleScaleForFormat(format);
-      const texture = device.createTexture({
-        data,
-        format,
+    try {
+      const tile = await image.fetchTile(x, y, { signal, boundless: false });
+      const array: RasterArray = tile.array;
+      const bands = new Map<
+        string,
+        { texture: Texture; uvTransform: UvTransform }
+      >();
+      let totalBytes = 0;
+      let sampleScale = 1;
+      for (const idx of bandIndexes) {
+        const i = idx - 1;
+        if (i < 0 || i >= array.count) continue;
+        const bandData: RasterTypedArray =
+          array.layout === "band-separate"
+            ? array.bands[i]
+            : extractBand(array.data as RasterTypedArray, i, array.count);
+        const format = singleBandFormat(bandData);
+        const data = coerceForFormat(bandData, format);
+        sampleScale = sampleScaleForFormat(format);
+        const texture = device.createTexture({
+          data,
+          format,
+          width: array.width,
+          height: array.height,
+        });
+        bands.set(String(idx), { texture, uvTransform: IDENTITY_UV });
+        // Use the *post-coercion* per-element byte size so deck.gl's tile
+        // cache budget reflects the actual buffer allocated. coerceForFormat
+        // upcasts int16/uint16 to Float32 (4 bytes).
+        totalBytes += array.width * array.height * data.BYTES_PER_ELEMENT;
+      }
+      const result: MultiBandTileData = {
+        bands,
         width: array.width,
         height: array.height,
-      });
-      bands.set(String(idx), { texture, uvTransform: IDENTITY_UV });
-      // Use the *post-coercion* per-element byte size so deck.gl's tile
-      // cache budget reflects the actual buffer allocated. coerceForFormat
-      // upcasts int16/uint16 to Float32 (4 bytes).
-      totalBytes += array.width * array.height * data.BYTES_PER_ELEMENT;
+        byteLength: totalBytes,
+        nodata: array.nodata,
+        sampleScale,
+      };
+      if (tileFinalizer && bands.size > 0) {
+        tileFinalizer.register(
+          result,
+          Array.from(bands.values(), (v) => v.texture),
+        );
+      }
+      return result;
+    } catch (err) {
+      // Aborts are routine (pan/zoom cancels in-flight tiles) — let them
+      // propagate untouched. Any other failure is a real render error the
+      // user should see; report it, then re-throw so deck.gl still marks the
+      // tile failed rather than caching a broken result.
+      if (!isAbortError(err)) tileErrorHandler?.(err);
+      throw err;
     }
-    const result: MultiBandTileData = {
-      bands,
-      width: array.width,
-      height: array.height,
-      byteLength: totalBytes,
-      nodata: array.nodata,
-      sampleScale,
-    };
-    if (tileFinalizer && bands.size > 0) {
-      tileFinalizer.register(
-        result,
-        Array.from(bands.values(), (v) => v.texture),
-      );
-    }
-    return result;
   };
 }

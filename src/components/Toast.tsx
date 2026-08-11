@@ -1,20 +1,24 @@
 type Props = {
   message: string | null;
   onDismiss: () => void;
+  /** "error" (default) draws a red, assertive banner; "warning" draws an amber,
+   * polite one for non-blocking notices. */
+  level?: "error" | "warning";
 };
 
-export function Toast({ message, onDismiss }: Props) {
+export function Toast({ message, onDismiss, level = "error" }: Props) {
   if (!message) return null;
+  const isWarning = level === "warning";
   return (
     <div
-      role="alert"
+      role={isWarning ? "status" : "alert"}
       className="panel"
       style={{
         position: "absolute",
         bottom: 24,
         left: "50%",
         transform: "translateX(-50%)",
-        background: "#7a1a1a",
+        background: isWarning ? "#7a5a1a" : "#7a1a1a",
         color: "#ffffff",
         padding: "10px 14px",
         borderRadius: "var(--radius)",
@@ -70,6 +74,16 @@ export function humanizeError(err: unknown): string {
     lower.includes("projection name")
   ) {
     return "This COG uses a map projection this viewer can't display. Only common projections are supported.";
+  }
+  if (lower.includes("not tiled")) {
+    return "This GeoTIFF is stored in strips, not internal tiles — it isn't a Cloud Optimized GeoTIFF, so the viewer can't stream it. Re-encode it as a COG with internal tiling and overviews.";
+  }
+  if (
+    lower.includes("unsupported") ||
+    lower.includes("compression") ||
+    lower.includes("decode")
+  ) {
+    return "The viewer couldn't decode this COG's tiles (possibly an unsupported compression).";
   }
   if (lower.includes("404") || lower.includes("not found")) {
     return "The COG URL returned 404 Not Found.";
