@@ -78,11 +78,7 @@ export function humanizeError(err: unknown): string {
   if (lower.includes("not tiled")) {
     return "This GeoTIFF is stored in strips, not internal tiles — it isn't a Cloud Optimized GeoTIFF, so the viewer can't stream it. Re-encode it as a COG with internal tiling and overviews.";
   }
-  if (
-    lower.includes("unsupported") ||
-    lower.includes("compression") ||
-    lower.includes("decode")
-  ) {
+  if (lower.includes("unsupported compression") || lower.includes("decode")) {
     return "The viewer couldn't decode this COG's tiles (possibly an unsupported compression).";
   }
   if (lower.includes("404") || lower.includes("not found")) {
