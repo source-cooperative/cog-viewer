@@ -20,6 +20,7 @@ import { EmptyState } from "./components/EmptyState";
 import { FullscreenButton } from "./components/FullscreenButton";
 import { Toast, humanizeError } from "./components/Toast";
 import { isValidGeographicBounds } from "./geo/bounds";
+import { selectOverlayLayers } from "./geo/overlay-layers";
 import {
   buildRgbCompositeRenderTile,
   buildSingleCompositeRenderTile,
@@ -81,6 +82,11 @@ export default function App() {
   const [bandCount, setBandCount] = useState<number | null>(null);
   const [bandNames, setBandNames] = useState<Map<number, string> | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // False when the COG's geographic extent couldn't be determined (unresolved
+  // or unsupported CRS). Gates the tile layer off so we don't paint mislocated
+  // tiles alongside the "could not determine geographic extent" error — the
+  // tile-placement path clamps coordinates and would otherwise draw anyway.
+  const [extentValid, setExtentValid] = useState(true);
   // Non-blocking notice (e.g. a COG with no overviews) — rendered as an amber
   // Toast alongside the red error one; the two are mutually exclusive per load.
   const [warning, setWarning] = useState<string | null>(null);
@@ -122,6 +128,7 @@ export default function App() {
     setBandNames(null);
     setError(null);
     setWarning(null);
+    setExtentValid(true);
     const url = state.url;
     if (!url) return;
     let cancelled = false;
@@ -258,11 +265,15 @@ export default function App() {
           // fail to reproject cleanly to WGS84 — that yields NaN/Infinity or
           // raw projected-CRS values instead of real lng/lat. Feeding those
           // into fitBounds throws an uncaught "Invalid LngLat" deep inside
-          // maplibre-gl, so bail out with a clear message instead.
+          // maplibre-gl, so bail out with a clear message instead. Also drop
+          // the tile layer (via extentValid) so we don't paint mislocated
+          // tiles under that error — the library's tile-placement path clamps
+          // coordinates and would otherwise keep drawing.
           setError(
             "Could not determine this COG's geographic extent — its " +
               "coordinate reference system may be missing or unsupported.",
           );
+          setExtentValid(false);
           return;
         }
         const { west, south, east, north } = options.geographicBounds;
@@ -316,7 +327,7 @@ export default function App() {
         }}
       >
         <DeckGLOverlay
-          layers={layer ? [layer] : []}
+          layers={selectOverlayLayers(layer, extentValid)}
           interleaved
           onDeviceInitialized={setDevice}
         />
