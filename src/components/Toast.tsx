@@ -49,10 +49,18 @@ export function Toast({ message, onDismiss, level = "error" }: Props) {
 export function humanizeError(err: unknown): string {
   const msg = err instanceof Error ? err.message : String(err);
   const lower = msg.toLowerCase();
+  // "Failed to fetch" from the browser Fetch API indicates a network-level
+  // error (CORS, offline, etc.). @chunkd/source-http wraps ALL errors as
+  // "Failed to fetch: <url>" (note the colon + URL), so we must exclude that
+  // pattern to avoid misattributing server/rate-limit errors as CORS. Our
+  // geotiff library also throws "Failed to fetch bytes from offset:N ..." when
+  // the server returns fewer bytes than requested — exclude "bytes" too.
   if (
     lower.includes("cors") ||
-    lower.includes("failed to fetch") ||
-    lower.includes("networkerror")
+    lower.includes("networkerror") ||
+    (lower.includes("failed to fetch") &&
+      !lower.includes("failed to fetch:") &&
+      !lower.includes("bytes"))
   ) {
     return "Could not load the COG. The host may not allow cross-origin requests (CORS) — it needs Access-Control-Allow-Origin and Access-Control-Expose-Headers: Content-Range.";
   }
