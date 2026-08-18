@@ -1,0 +1,68 @@
+diff --git a/dist/raster-tileset/affine-tileset-level.js b/dist/raster-tileset/affine-tileset-level.js
+index 213d5fb3bb7a2ab4ca36936339f17230ce869ba4..fb3c0a8036471cd7ebcaff82d6859f3a50d69230 100644
+--- a/dist/raster-tileset/affine-tileset-level.js
++++ b/dist/raster-tileset/affine-tileset-level.js
+@@ -26,6 +26,8 @@ export class AffineTilesetLevel {
+         this._invAffine = affine.invert(options.affine);
+         this.tileWidth = options.tileWidth;
+         this.tileHeight = options.tileHeight;
++        this._arrayWidth = options.arrayWidth;
++        this._arrayHeight = options.arrayHeight;
+         this.matrixWidth = Math.ceil(options.arrayWidth / options.tileWidth);
+         this.matrixHeight = Math.ceil(options.arrayHeight / options.tileHeight);
+         // Geometric mean of the two pixel-edge scales handles non-square pixels.
+@@ -51,11 +53,13 @@ export class AffineTilesetLevel {
+         const tw = this.tileWidth;
+         const th = this.tileHeight;
+         const af = this._affine;
++        const right = Math.min((col + 1) * tw, this._arrayWidth);
++        const bottom = Math.min((row + 1) * th, this._arrayHeight);
+         return {
+             topLeft: affine.apply(af, col * tw, row * th),
+-            topRight: affine.apply(af, (col + 1) * tw, row * th),
+-            bottomLeft: affine.apply(af, col * tw, (row + 1) * th),
+-            bottomRight: affine.apply(af, (col + 1) * tw, (row + 1) * th),
++            topRight: affine.apply(af, right, row * th),
++            bottomLeft: affine.apply(af, col * tw, bottom),
++            bottomRight: affine.apply(af, right, bottom),
+         };
+     }
+     tileTransform(col, row) {
+diff --git a/dist/raster-tileset/raster-tile-traversal.js b/dist/raster-tileset/raster-tile-traversal.js
+index d62c5e4e2ae585a83f1b7b52f43a5580a44d2fa4..a90e7f124629e952f101531cb2f8f3848ec68746 100644
+--- a/dist/raster-tileset/raster-tile-traversal.js
++++ b/dist/raster-tileset/raster-tile-traversal.js
+@@ -374,8 +374,23 @@ export class RasterTileNode {
+         const tileCorners = this.level.projectedTileCorners(this.x, this.y);
+         const refPointsEPSG3857 = sampleReferencePointsInEPSG3857(REF_POINTS_9, tileCorners, this.descriptor.projectTo3857, this.descriptor.projectTo4326);
+         const commonSpacePositions = refPointsEPSG3857.map((xy) => rescaleEPSG3857ToCommonSpace(xy));
++        // Filter out NaN positions that arise when tile corners lie outside the
++        // CRS domain (e.g. corners of a bounding rectangle that extend beyond
++        // a Mollweide ellipse). Use only the valid subset for the OBB and AABB.
++        const validPositions = commonSpacePositions.filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y));
++        // If no reference point projects successfully, return a world-covering
++        // bounding volume so the tile is not incorrectly culled.
++        if (validPositions.length === 0) {
++            return {
++                boundingVolume: makeOrientedBoundingBoxFromPoints([
++                    [0, 0, minZ], [TILE_SIZE, 0, minZ],
++                    [0, TILE_SIZE, minZ], [TILE_SIZE, TILE_SIZE, minZ],
++                ]),
++                commonSpaceBounds: [0, 0, TILE_SIZE, TILE_SIZE],
++            };
++        }
+         const refPointPositions = [];
+-        for (const p of commonSpacePositions) {
++        for (const p of validPositions) {
+             refPointPositions.push([p[0], p[1], minZ]);
+             if (minZ !== maxZ) {
+                 // Also sample at maximum elevation to capture the full 3D volume
+@@ -388,7 +403,7 @@ export class RasterTileNode {
+         let minY = Number.POSITIVE_INFINITY;
+         let maxX = Number.NEGATIVE_INFINITY;
+         let maxY = Number.NEGATIVE_INFINITY;
+-        for (const [x, y] of commonSpacePositions) {
++        for (const [x, y] of validPositions) {
+             if (x < minX) {
+                 minX = x;
+             }

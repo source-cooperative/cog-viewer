@@ -37,6 +37,31 @@ import {
 } from "./render/tile-loader";
 import { useCogState } from "./state/useCogState";
 
+// Get the default epsgResolver from COGLayer's defaultProps so the wrapper has
+// a stable identity (module scope = no re-creation on every render).
+// COGLayer.defaultProps is typed as typeof RasterTileLayer.defaultProps, which
+// doesn't expose epsgResolver, so we access it via any.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const _defaultEpsgResolver = (COGLayer as any).defaultProps.epsgResolver as (
+  epsg: number,
+) => Promise<Record<string, unknown>>;
+
+/**
+ * epsg.io PROJJSON for projected CRS (e.g. ESRI:54009 World Mollweide) often
+ * omits 'unit' from Cartesian axes.  wkt-parser then leaves `units` undefined,
+ * causing COGLayer._parseGeoTIFF to throw "Source projection is missing
+ * 'units' property" as an unhandled rejection — silently killing the layer.
+ * For any EPSG-registered Cartesian projected system, metres is the correct
+ * default when no unit is stated.
+ */
+async function robustEpsgResolver(epsg: number) {
+  const proj = await _defaultEpsgResolver(epsg);
+  if ((!proj.units || proj.units === "unknown") && proj.projName !== "longlat") {
+    (proj as Record<string, unknown>).units = "m";
+  }
+  return proj;
+}
+
 const darkMql = window.matchMedia("(prefers-color-scheme: dark)");
 const subscribeColorScheme = (cb: () => void) => {
   darkMql.addEventListener("change", cb);
@@ -170,6 +195,18 @@ export default function App() {
     return () => setTileErrorHandler(null);
   }, []);
 
+  // _parseGeoTIFF in deck.gl-geotiff has incomplete error handling — errors
+  // after fetchGeoTIFF (CRS parsing, epsgResolver, units check) become
+  // unhandled promise rejections. Catch them here and show as a toast.
+  useEffect(() => {
+    const handle = (e: PromiseRejectionEvent) => {
+      console.error("[cog-viewer] Unhandled rejection:", e.reason);
+      setError((prev) => prev ?? humanizeError(e.reason));
+    };
+    window.addEventListener("unhandledrejection", handle);
+    return () => window.removeEventListener("unhandledrejection", handle);
+  }, []);
+
   // When we have a GeoTIFF for the current URL, compute auto-stats once.
   useEffect(() => {
     if (!geotiff) return;
@@ -247,6 +284,7 @@ export default function App() {
     const cogProps = {
       id: "cog",
       geotiff,
+      epsgResolver: robustEpsgResolver,
       opacity: state.opacity,
       getTileData,
       renderTile,
@@ -256,6 +294,7 @@ export default function App() {
         tiff: GeoTIFF,
         options: {
           geographicBounds: { west: number; south: number; east: number; north: number };
+          projection: Record<string, unknown>;
         },
       ) => {
         setBandCount(tiff.count);
@@ -289,6 +328,7 @@ export default function App() {
     return new COGLayer(cogProps);
   }, [
     geotiff,
+    autoStats,
     state.opacity,
     state.mode,
     state.bands,
@@ -301,7 +341,6 @@ export default function App() {
     firstSymbolId,
     colormapTexture,
     bandNames,
-    autoStats,
   ]);
 
   // Apply the dark theme to <html> so portal-rendered children
