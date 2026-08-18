@@ -35,6 +35,9 @@ importers:
       '@developmentseed/geotiff':
         specifier: ^0.6.1
         version: 0.6.1
+      '@developmentseed/proj':
+        specifier: ^0.6.1
+        version: 0.6.1
       '@luma.gl/core':
         specifier: ^9.3.3
         version: 9.3.3

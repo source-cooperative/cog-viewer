@@ -59,18 +59,26 @@ export function humanizeError(err: unknown): string {
   if (
     lower.includes("not a tiff") ||
     lower.includes("invalid tiff") ||
-    lower.includes("unrecognized")
+    lower.includes("unrecognized") ||
+    // @cogeotiff/core throws "Only tiff supported version:<n>" when the bytes
+    // aren't a TIFF at all (e.g. a Parquet file, whose header parses to a
+    // nonsense version number).
+    lower.includes("supported version") ||
+    lower.includes("only tiff")
   ) {
     return "This file does not look like a valid Cloud Optimized GeoTIFF.";
+  }
+  if (
+    lower.includes("coordinate transformation") ||
+    lower.includes("geotiff model type") ||
+    lower.includes("projection name")
+  ) {
+    return "This COG uses a map projection this viewer can't display. Only common projections are supported.";
   }
   if (lower.includes("not tiled")) {
     return "This GeoTIFF is stored in strips, not internal tiles — it isn't a Cloud Optimized GeoTIFF, so the viewer can't stream it. Re-encode it as a COG with internal tiling and overviews.";
   }
-  if (
-    lower.includes("unsupported") ||
-    lower.includes("compression") ||
-    lower.includes("decode")
-  ) {
+  if (lower.includes("unsupported compression") || lower.includes("decode")) {
     return "The viewer couldn't decode this COG's tiles (possibly an unsupported compression).";
   }
   if (lower.includes("404") || lower.includes("not found")) {

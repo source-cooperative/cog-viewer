@@ -7,6 +7,7 @@ import {
   TiffTag,
 } from "@cogeotiff/core";
 import type { GeoTIFF, Overview } from "@developmentseed/geotiff";
+import { crsOverrideLabel } from "./crs-rescue";
 
 /** A single `<Item>` from `<GDALMetadata>`. `sample` is 1-based when present
  * (GDAL writes 0-based; we normalize). `role` is the optional `role` attribute
@@ -362,7 +363,26 @@ export function summarizeGeoTIFF(tiff: MetadataInput): MetadataSummary {
     });
   }
 
-  const { code, label } = crsLabel(tiff.crs as never);
+  // `crs` is a lazy getter that can throw for projections the library can't
+  // parse. loadGeoTIFF normally rescues or rejects those before we get here, but
+  // guard anyway so the panel degrades to an "unknown" label instead of crashing
+  // the whole app on render.
+  let crsValue: number | { name?: string } | null;
+  try {
+    crsValue = tiff.crs as never;
+  } catch {
+    crsValue = null;
+  }
+  let { code, label } = crsLabel(crsValue);
+  // Rescued CRSes (e.g. Cylindrical Equal Area) are seeded as a private sentinel
+  // code; show the real projection name rather than a meaningless "EPSG:<n>".
+  if (typeof crsValue === "number") {
+    const overrideLabel = crsOverrideLabel(crsValue);
+    if (overrideLabel) {
+      label = overrideLabel;
+      code = null;
+    }
+  }
   const gkd = tiff.gkd;
   const citation =
     gkd.citation || gkd.projectedCitation || gkd.geodeticCitation || null;

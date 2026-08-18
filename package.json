@@ -22,6 +22,7 @@
     "@developmentseed/deck.gl-geotiff": "^0.6.1",
     "@developmentseed/deck.gl-raster": "0.6.1",
     "@developmentseed/geotiff": "^0.6.1",
+    "@developmentseed/proj": "^0.6.1",
     "@luma.gl/core": "^9.3.3",
     "@sentry/react": "^10.69.0",
     "maplibre-gl": "^5.24.0",

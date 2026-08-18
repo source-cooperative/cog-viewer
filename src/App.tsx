@@ -13,6 +13,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "reac
 import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
 import { isDarkChrome, resolveBasemap } from "./basemaps";
+import { rescuingEpsgResolver } from "./cog/crs-rescue";
 import { loadGeoTIFF } from "./cog/load-geotiff";
 import { validateCog } from "./cog/validate";
 import { ControlsPanel } from "./components/ControlsPanel";
@@ -247,6 +248,10 @@ export default function App() {
     const cogProps = {
       id: "cog",
       geotiff,
+      // Resolve rescued CRSes (e.g. Cylindrical Equal Area seeded by
+      // loadGeoTIFF) to a proj4 definition; delegates to the library default
+      // for real EPSG codes. See cog/crs-rescue.ts.
+      epsgResolver: rescuingEpsgResolver,
       opacity: state.opacity,
       getTileData,
       renderTile,

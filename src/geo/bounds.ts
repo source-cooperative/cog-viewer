@@ -17,8 +17,12 @@ export function isValidGeographicBounds(bounds: GeographicBounds): boolean {
   const { west, south, east, north } = bounds;
   return (
     [west, south, east, north].every(Number.isFinite) &&
+    west >= -180 &&
+    west <= 180 &&
     south >= -90 &&
     south <= 90 &&
+    east >= -180 &&
+    east <= 180 &&
     north >= -90 &&
     north <= 90 &&
     south <= north
