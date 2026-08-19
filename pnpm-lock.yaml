@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  '@developmentseed/geotiff': ^0.7.0
+
 importers:
 
   .:
@@ -31,10 +34,10 @@ importers:
         version: 0.6.1(71285630fbe21754b1ea3701085edd16)
       '@developmentseed/deck.gl-raster':
         specifier: 0.6.1
-        version: 0.6.1(a75dc5edb91ceb6533d4cbdd91a58353)
+        version: 0.6.1(7c3bc0d5f214322b0f10f0830f778b46)
       '@developmentseed/geotiff':
-        specifier: ^0.6.1
-        version: 0.6.1
+        specifier: ^0.7.0
+        version: 0.7.0
       '@luma.gl/core':
         specifier: ^9.3.3
         version: 9.3.3
@@ -111,10 +114,6 @@ packages:
   '@asamuzakjp/nwsapi@2.3.9':
     resolution: {integrity: sha512-n8GuYSrI9bF7FFZ/SjhwevlHc8xaVlb/7HmHelnc/PZXBD2ZR49NnN9sMMuDdEGPeeRQ5d0hqlSlEpgCX3Wl0Q==}
 
-  '@babel/code-frame@7.29.0':
-    resolution: {integrity: sha512-9NhCeYjq9+3uxgdtp20LSiJXJvN0FeCtNGpJxuMFZ1Kv3cWUNb6DOhJwUvcVCzKGR66cw4njwM6hrJLqgOwbcw==}
-    engines: {node: '>=6.9.0'}
-
   '@babel/code-frame@7.29.7':
     resolution: {integrity: sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw==}
     engines: {node: '>=6.9.0'}
@@ -151,10 +150,6 @@ packages:
 
   '@babel/helper-string-parser@7.29.7':
     resolution: {integrity: sha512-Pb5ijPrZ89GDH8223L4UP8i6QApWxs04RbPQJTeWDV0/keR2E36MeKnyr6LYmUUvqRRI+Iv87SuF1W6ErINzYw==}
-    engines: {node: '>=6.9.0'}
-
-  '@babel/helper-validator-identifier@7.28.5':
-    resolution: {integrity: sha512-qSs4ifwzKJSV39ucNjsvc6WVHs6b7S03sOh2OcHF9UHfVPqWWALUsNUVzhSBiItjRZoLHx7nIarVjqKVusUZ1Q==}
     engines: {node: '>=6.9.0'}
 
   '@babel/helper-validator-identifier@7.29.7':
@@ -298,6 +293,9 @@ packages:
   '@developmentseed/affine@0.6.1':
     resolution: {integrity: sha512-RSywOfmKAUxib61vXOYFoobIZS/vZWvaAHgUlTTwejlgAU7tK9VvViz0xTqwHF9K3BLDD12EdNB1yS/ZDpBlWQ==}
 
+  '@developmentseed/affine@0.7.0':
+    resolution: {integrity: sha512-O00T3nLFY8DiEqTIpKzEDc6wyVLth4DoFc0gPE6EiaEdFM4lQsQnH8x5mrknDB7jeLyKW2aPnNyBxoPqS7JKHA==}
+
   '@developmentseed/deck.gl-geotiff@0.6.1':
     resolution: {integrity: sha512-xPK/ZIf332xCOn9U+Of7CxW1+VKKi6DSSAao6oXRIRk7E82oeJAInWHnnpPmIkKYykdkog0pgQhymNb+MbAYhg==}
     peerDependencies:
@@ -318,8 +316,8 @@ packages:
       '@luma.gl/core': ^9.3.2
       '@luma.gl/shadertools': ^9.3.2
 
-  '@developmentseed/geotiff@0.6.1':
-    resolution: {integrity: sha512-gAqVglVP+2w7LMODaKNXMbWEyOQjaBwVibLzog1EY+N2S9r7eh1KT27k/VLS3ksf+Rqn3PZnUkJ/cGHumSHFEg==}
+  '@developmentseed/geotiff@0.7.0':
+    resolution: {integrity: sha512-KnTJ7ZRzg7laiNRlfuslNN4EmM8lvOp4h7Y/RTyojCmiDycJxT0tbo7gMDjFPSvys5tWxoR/9WGPLKyipkzRiQ==}
 
   '@developmentseed/lzw-tiff-decoder@0.2.2':
     resolution: {integrity: sha512-bsBIdV1LyqcrtnYtIYu3C/297X2wxeYkmmhHzR02OOX823sGxT8GLGdenTmwoXvNWkozk3b+ptXtJeSUmNPaTA==}
@@ -327,8 +325,14 @@ packages:
   '@developmentseed/morecantile@0.6.1':
     resolution: {integrity: sha512-65icLFsLYThYIINsii95g0gnL4enmBstTdHxmAue66UBtrOXBGm6+PccbRLhGSyrYQHXTg4YZNl7zCetdh6PYg==}
 
+  '@developmentseed/morecantile@0.7.0':
+    resolution: {integrity: sha512-m9tWDase9COlP/EZ2KK/ydraRU/5yfwvmF/y/2g/iFMFW1vYHQTW/8JYjmo84SiJXUifDDY2xoA3ErYlcWJctg==}
+
   '@developmentseed/proj@0.6.1':
     resolution: {integrity: sha512-2FjoFt06pcvQrgZeXbK68mixIpiUrnnGwasQqJGCzTnnATWx3f5clhGqJEpP0MPx36g1oyZLaA7qoTryx5Ggow==}
+
+  '@developmentseed/proj@0.7.0':
+    resolution: {integrity: sha512-3EPvX29sM3iCn+avpGKz18ZzlRJdn53SbkmFWJXDWh/fNreP3RjcDJGBbvfwnZnVtiLUqnTzM8V4fLKnYHKj0A==}
 
   '@developmentseed/raster-reproject@0.6.1':
     resolution: {integrity: sha512-1/xyCW5dpfsoiphCto7UVoV1k4Br9XOYU1K5gGtJy50gbmyjag7sOpFHrtc/Cjn/ZMKSe9DJT2XF8J25N+MDbw==}
@@ -1974,12 +1978,6 @@ snapshots:
 
   '@asamuzakjp/nwsapi@2.3.9': {}
 
-  '@babel/code-frame@7.29.0':
-    dependencies:
-      '@babel/helper-validator-identifier': 7.28.5
-      js-tokens: 4.0.0
-      picocolors: 1.1.1
-
   '@babel/code-frame@7.29.7':
     dependencies:
       '@babel/helper-validator-identifier': 7.29.7
@@ -2043,8 +2041,6 @@ snapshots:
       - supports-color
 
   '@babel/helper-string-parser@7.29.7': {}
-
-  '@babel/helper-validator-identifier@7.28.5': {}
 
   '@babel/helper-validator-identifier@7.29.7': {}
 
@@ -2225,6 +2221,8 @@ snapshots:
 
   '@developmentseed/affine@0.6.1': {}
 
+  '@developmentseed/affine@0.7.0': {}
+
   '@developmentseed/deck.gl-geotiff@0.6.1(71285630fbe21754b1ea3701085edd16)':
     dependencies:
       '@cogeotiff/core': 9.5.0
@@ -2234,7 +2232,7 @@ snapshots:
       '@deck.gl/mesh-layers': 9.3.2(@deck.gl/core@9.3.2)(@loaders.gl/core@4.4.2)(@luma.gl/core@9.3.3)(@luma.gl/engine@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3)))(@luma.gl/gltf@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/engine@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3)))(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3)))(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3))
       '@developmentseed/affine': 0.6.1
       '@developmentseed/deck.gl-raster': 0.6.1(a75dc5edb91ceb6533d4cbdd91a58353)
-      '@developmentseed/geotiff': 0.6.1
+      '@developmentseed/geotiff': 0.7.0
       '@developmentseed/morecantile': 0.6.1
       '@developmentseed/proj': 0.6.1
       '@developmentseed/raster-reproject': 0.6.1
@@ -2243,6 +2241,22 @@ snapshots:
       proj4: 2.20.8
     transitivePeerDependencies:
       - '@luma.gl/shadertools'
+
+  '@developmentseed/deck.gl-raster@0.6.1(7c3bc0d5f214322b0f10f0830f778b46)':
+    dependencies:
+      '@deck.gl/core': 9.3.2
+      '@deck.gl/geo-layers': 9.3.2(@deck.gl/core@9.3.2)(@deck.gl/extensions@9.3.2(@deck.gl/core@9.3.2)(@luma.gl/core@9.3.3)(@luma.gl/engine@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3))))(@deck.gl/layers@9.3.2(@deck.gl/core@9.3.2)(@loaders.gl/core@4.4.2)(@luma.gl/core@9.3.3)(@luma.gl/engine@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3))))(@deck.gl/mesh-layers@9.3.2(@deck.gl/core@9.3.2)(@loaders.gl/core@4.4.2)(@luma.gl/core@9.3.3)(@luma.gl/engine@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3)))(@luma.gl/gltf@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/engine@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3)))(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3)))(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3)))(@loaders.gl/core@4.4.2)(@luma.gl/core@9.3.3)(@luma.gl/engine@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3)))
+      '@deck.gl/layers': 9.3.2(@deck.gl/core@9.3.2)(@loaders.gl/core@4.4.2)(@luma.gl/core@9.3.3)(@luma.gl/engine@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3)))
+      '@deck.gl/mesh-layers': 9.3.2(@deck.gl/core@9.3.2)(@loaders.gl/core@4.4.2)(@luma.gl/core@9.3.3)(@luma.gl/engine@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3)))(@luma.gl/gltf@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/engine@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3)))(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3)))(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3))
+      '@developmentseed/affine': 0.6.1
+      '@developmentseed/morecantile': 0.7.0
+      '@developmentseed/proj': 0.6.1
+      '@developmentseed/raster-reproject': 0.6.1
+      '@luma.gl/core': 9.3.3
+      '@luma.gl/shadertools': 9.3.3(@luma.gl/core@9.3.3)
+      '@math.gl/core': 4.1.0
+      '@math.gl/culling': 4.1.0
+      '@math.gl/web-mercator': 4.1.0
 
   '@developmentseed/deck.gl-raster@0.6.1(a75dc5edb91ceb6533d4cbdd91a58353)':
     dependencies:
@@ -2260,17 +2274,17 @@ snapshots:
       '@math.gl/culling': 4.1.0
       '@math.gl/web-mercator': 4.1.0
 
-  '@developmentseed/geotiff@0.6.1':
+  '@developmentseed/geotiff@0.7.0':
     dependencies:
       '@chunkd/middleware': 11.3.0
       '@chunkd/source': 11.4.0
       '@chunkd/source-http': 11.4.0
       '@chunkd/source-memory': 11.2.0
       '@cogeotiff/core': 9.5.0
-      '@developmentseed/affine': 0.6.1
+      '@developmentseed/affine': 0.7.0
       '@developmentseed/lzw-tiff-decoder': 0.2.2
-      '@developmentseed/morecantile': 0.6.1
-      '@developmentseed/proj': 0.6.1
+      '@developmentseed/morecantile': 0.7.0
+      '@developmentseed/proj': 0.7.0
       fzstd: 0.1.1
       lerc: 4.1.1
       uuid: 14.0.0
@@ -2281,7 +2295,15 @@ snapshots:
     dependencies:
       '@developmentseed/affine': 0.6.1
 
+  '@developmentseed/morecantile@0.7.0':
+    dependencies:
+      '@developmentseed/affine': 0.7.0
+
   '@developmentseed/proj@0.6.1':
+    dependencies:
+      wkt-parser: 1.5.5
+
+  '@developmentseed/proj@0.7.0':
     dependencies:
       wkt-parser: 1.5.5
 
@@ -2863,7 +2885,7 @@ snapshots:
 
   '@testing-library/dom@10.4.1':
     dependencies:
-      '@babel/code-frame': 7.29.0
+      '@babel/code-frame': 7.29.7
       '@babel/runtime': 7.29.2
       '@types/aria-query': 5.0.4
       aria-query: 5.3.0

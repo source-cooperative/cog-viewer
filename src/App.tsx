@@ -165,7 +165,7 @@ export default function App() {
   // of failing tiles yields one message, not a flicker.
   useEffect(() => {
     setTileErrorHandler((err) => {
-      setError((prev) => prev ?? humanizeError(err));
+      setError((prev) => prev ?? humanizeError(err, "tile"));
     });
     return () => setTileErrorHandler(null);
   }, []);
