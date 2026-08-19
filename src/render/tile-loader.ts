@@ -33,9 +33,18 @@ export function setTileErrorHandler(fn: ((err: unknown) => void) | null): void {
   tileErrorHandler = fn;
 }
 
-/** AbortErrors are normal — deck.gl cancels in-flight tiles on pan/zoom. */
+/** AbortErrors are normal — deck.gl cancels in-flight tiles on pan/zoom.
+ * @chunkd/source-http wraps ALL errors in its own `SourceError` class
+ * (including `AbortError`) — the original DOMException ends up on `err.cause`
+ * via Error's native cause chaining. Check both the error itself and its cause
+ * so wrapped aborts aren't mistaken for real failures. */
 function isAbortError(err: unknown): boolean {
-  return err instanceof DOMException && err.name === "AbortError";
+  if (err instanceof DOMException && err.name === "AbortError") return true;
+  if (err instanceof Error) {
+    const { cause } = err;
+    if (cause instanceof DOMException && cause.name === "AbortError") return true;
+  }
+  return false;
 }
 
 export type MultiBandTileData = {
