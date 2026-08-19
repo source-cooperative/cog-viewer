@@ -242,6 +242,28 @@ index d62c5e4e2ae585a83f1b7b52f43a5580a44d2fa4..67b615a861bc4ccf2acf71eb3c804458
              commonSpaceBounds,
          };
      }
+@@ -672,12 +696,15 @@ export function getTileIndices(descriptor, opts) {
+     const [minLng, minLat, maxLng, maxLat] = wgs84Bounds;
+     const bottomLeft = lngLatToWorld([minLng, minLat]);
+     const topRight = lngLatToWorld([maxLng, maxLat]);
+-    const bounds = [
+-        bottomLeft[0],
+-        bottomLeft[1],
+-        topRight[0],
+-        topRight[1],
+-    ];
++    // lngLatToWorld uses screen y-convention (y=0 at north, y=512 at south), but
++    // commonSpaceBounds uses GL y-convention (y=0 at south, y=512 at north) via
++    // rescaleEPSG3857ToCommonSpace. Flip y here so insideBounds compares the same axis.
++    const bounds = [
++        bottomLeft[0],
++        TILE_SIZE - bottomLeft[1],
++        topRight[0],
++        TILE_SIZE - topRight[1],
++    ];
+     const roots = createRootTiles({
+         descriptor,
+         viewport,
 diff --git a/dist/raster-tileset/raster-tileset-2d.js b/dist/raster-tileset/raster-tileset-2d.js
 index bdfce4655c03a6d7e83c7e00c42937a9292b145c..6e0be34894564885de9867869a509a9feb8748ff 100644
 --- a/dist/raster-tileset/raster-tileset-2d.js
