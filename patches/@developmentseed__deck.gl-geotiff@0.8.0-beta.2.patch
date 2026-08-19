@@ -1,0 +1,64 @@
+diff --git a/dist/geotiff/geotiff.js b/dist/geotiff/geotiff.js
+index b07748d892c3f174650047cbae6285ab5fa94efa..471b81549f455a4c5f33c0685d5ba5c9f2261934 100644
+--- a/dist/geotiff/geotiff.js
++++ b/dist/geotiff/geotiff.js
+@@ -54,24 +54,43 @@ export async function fetchGeoTIFF(input, options = {}) {
+ }
+ /**
+  * Calculate the WGS84 bounding box of a GeoTIFF image
++ *
++ * Samples many points along each edge of the native-CRS bounding box rather
++ * than only the 4 corners.  For bounded-domain projections (e.g. World
++ * Mollweide / ESRI:54009) the rectangular bounding box extends outside the
++ * valid domain, so corner projections return [NaN, NaN].  Dense edge sampling
++ * finds the valid points where the CRS boundary intersects the box edges and
++ * produces a correct WGS84 envelope.
+  */
+ export function getGeographicBounds(geotiff, converter) {
+     const [minX, minY, maxX, maxY] = geotiff.bbox;
+-    // Reproject all four corners to handle rotation/skew
+-    const corners = [
+-        converter.forward([minX, minY]), // bottom-left
+-        converter.forward([maxX, minY]), // bottom-right
+-        converter.forward([maxX, maxY]), // top-right
+-        converter.forward([minX, maxY]), // top-left
+-    ];
+-    // Find the bounding box that encompasses all reprojected corners
+-    const lons = corners.map((c) => c[0]);
+-    const lats = corners.map((c) => c[1]);
+-    const west = Math.min(...lons);
+-    const south = Math.min(...lats);
+-    const east = Math.max(...lons);
+-    const north = Math.max(...lats);
+-    // Return bounds in MapLibre format: [[west, south], [east, north]]
+-    return { west, south, east, north };
++    const SAMPLES = 20;
++    const validLons = [];
++    const validLats = [];
++    const tryProject = (x, y) => {
++        const [lon, lat] = converter.forward([x, y]);
++        if (Number.isFinite(lon) && Number.isFinite(lat)) {
++            validLons.push(lon);
++            validLats.push(lat);
++        }
++    };
++    for (let i = 0; i <= SAMPLES; i++) {
++        const t = i / SAMPLES;
++        const mx = minX + t * (maxX - minX);
++        const my = minY + t * (maxY - minY);
++        tryProject(mx, minY); // bottom edge
++        tryProject(mx, maxY); // top edge
++        tryProject(minX, my); // left edge
++        tryProject(maxX, my); // right edge
++    }
++    if (validLons.length === 0) {
++        return { west: NaN, south: NaN, east: NaN, north: NaN };
++    }
++    return {
++        west: Math.min(...validLons),
++        south: Math.min(...validLats),
++        east: Math.max(...validLons),
++        north: Math.max(...validLats),
++    };
+ }
+ //# sourceMappingURL=geotiff.js.map
