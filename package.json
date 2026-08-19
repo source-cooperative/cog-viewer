@@ -48,7 +48,8 @@
       "@sentry/cli"
     ],
     "patchedDependencies": {
-      "@developmentseed/deck.gl-raster@0.8.0-beta.2": "patches/@developmentseed__deck.gl-raster@0.8.0-beta.2.patch"
+      "@developmentseed/deck.gl-raster@0.8.0-beta.2": "patches/@developmentseed__deck.gl-raster@0.8.0-beta.2.patch",
+      "@developmentseed/raster-reproject@0.8.0-beta.2": "patches/@developmentseed__raster-reproject@0.8.0-beta.2.patch"
     }
   }
 }
