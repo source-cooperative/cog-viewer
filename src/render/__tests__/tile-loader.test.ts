@@ -5,8 +5,15 @@ import {
 } from "../tile-loader";
 
 // Minimal stubs — only the fields our code touches.
-function makeDevice() {
-  return { createTexture: vi.fn() };
+function makeOpts(overrides?: object) {
+  return {
+    device: { createTexture: vi.fn() } as never,
+    pool: null as never, // required by GetTileDataOptions; not read by our loader
+    x: 0,
+    y: 0,
+    signal: new AbortController().signal,
+    ...overrides,
+  };
 }
 
 function makeImage(fetchTileImpl: () => Promise<unknown>) {
@@ -25,9 +32,7 @@ describe("makeMultiBandTileLoader — abort handling", () => {
     const handler = vi.fn();
     setTileErrorHandler(handler);
 
-    await expect(
-      loader(image, { device: makeDevice() as never, x: 0, y: 0, signal: new AbortController().signal }),
-    ).rejects.toThrow();
+    await expect(loader(image, makeOpts())).rejects.toThrow();
     expect(handler).not.toHaveBeenCalled();
   });
 
@@ -44,9 +49,7 @@ describe("makeMultiBandTileLoader — abort handling", () => {
     const handler = vi.fn();
     setTileErrorHandler(handler);
 
-    await expect(
-      loader(image, { device: makeDevice() as never, x: 0, y: 0, signal: new AbortController().signal }),
-    ).rejects.toThrow();
+    await expect(loader(image, makeOpts())).rejects.toThrow();
     expect(handler).not.toHaveBeenCalled();
   });
 
@@ -57,9 +60,7 @@ describe("makeMultiBandTileLoader — abort handling", () => {
     const handler = vi.fn();
     setTileErrorHandler(handler);
 
-    await expect(
-      loader(image, { device: makeDevice() as never, x: 0, y: 0, signal: new AbortController().signal }),
-    ).rejects.toThrow();
+    await expect(loader(image, makeOpts())).rejects.toThrow();
     expect(handler).toHaveBeenCalledWith(networkError);
   });
 });
