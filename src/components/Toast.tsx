@@ -45,8 +45,13 @@ export function Toast({ message, onDismiss, level = "error" }: Props) {
   );
 }
 
-/** Map a thrown error or rejected fetch to a one-line user-facing message. */
-export function humanizeError(err: unknown): string {
+/** Map a thrown error or rejected fetch to a one-line user-facing message.
+ * Pass `source: "tile"` when the error comes from a per-tile Range request
+ * rather than from opening the COG, so the fallback message is accurate. */
+export function humanizeError(
+  err: unknown,
+  source: "cog" | "tile" = "cog",
+): string {
   const msg = err instanceof Error ? err.message : String(err);
   const lower = msg.toLowerCase();
   // "Failed to fetch" from the browser Fetch API indicates a network-level
@@ -83,6 +88,15 @@ export function humanizeError(err: unknown): string {
   }
   if (lower.includes("404") || lower.includes("not found")) {
     return "The COG URL returned 404 Not Found.";
+  }
+  if (source === "tile") {
+    // @chunkd/source-http wraps tile Range request failures as
+    // "Failed to fetch: <url>". Show a neutral message; the COG itself
+    // loaded fine so "Could not load the COG" would be misleading.
+    if (lower.startsWith("failed to fetch:") && lower.includes("http")) {
+      return "A tile failed to load — the server may be temporarily unavailable.";
+    }
+    return `A tile failed to load: ${msg}`;
   }
   return `Could not load the COG: ${msg}`;
 }

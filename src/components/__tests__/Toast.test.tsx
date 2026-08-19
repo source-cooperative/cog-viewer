@@ -34,6 +34,26 @@ describe("humanizeError", () => {
     );
     expect(msg).not.toMatch(/cors/i);
   });
+
+  it("default (cog) context uses 'Could not load the COG' fallback for unrecognised errors", () => {
+    const msg = humanizeError(new Error("something went wrong xyz42"));
+    expect(msg).toMatch(/could not load the cog/i);
+  });
+
+  it("tile context uses tile-specific fallback and never says 'Could not load the COG'", () => {
+    const msg = humanizeError(new Error("something went wrong xyz42"), "tile");
+    expect(msg).not.toMatch(/could not load the cog/i);
+  });
+
+  it("tile context gives a clean message for @chunkd/source-http wrapped errors", () => {
+    const msg = humanizeError(
+      new Error("Failed to fetch: https://data.source.coop/file.tif"),
+      "tile",
+    );
+    expect(msg).not.toMatch(/could not load the cog/i);
+    expect(msg).not.toMatch(/cors/i);
+    expect(msg).toMatch(/tile/i);
+  });
 });
 
 describe("Toast", () => {
