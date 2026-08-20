@@ -44,7 +44,8 @@ import { useCogState } from "./state/useCogState";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const _defaultEpsgResolver = (COGLayer as any).defaultProps.epsgResolver as (
   epsg: number,
-) => Promise<Record<string, unknown>>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+) => Promise<any>;
 
 /**
  * epsg.io PROJJSON for projected CRS (e.g. ESRI:54009 World Mollweide) often
