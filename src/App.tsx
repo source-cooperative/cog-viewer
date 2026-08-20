@@ -295,7 +295,6 @@ export default function App() {
         tiff: GeoTIFF,
         options: {
           geographicBounds: { west: number; south: number; east: number; north: number };
-          projection: Record<string, unknown>;
         },
       ) => {
         setBandCount(tiff.count);
