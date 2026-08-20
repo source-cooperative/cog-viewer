@@ -86,7 +86,7 @@ export function humanizeError(
   ) {
     return "The viewer couldn't decode this COG's tiles (possibly an unsupported compression).";
   }
-  if (lower.includes("404") || lower.includes("not found")) {
+  if (lower.includes("404")) {
     return "The COG URL returned 404 Not Found.";
   }
   if (source === "tile") {

@@ -1,0 +1,21 @@
+diff --git a/dist/delatin.js b/dist/delatin.js
+index 7e1d3ac5bd16b3de92b1373f53e7c5d9dbf01e5b..c5eb8014b09f405e4c50c167363685ffa82e443f 100644
+--- a/dist/delatin.js
++++ b/dist/delatin.js
+@@ -231,8 +231,14 @@ export class RasterReprojector {
+             const dx = pixelExactX - pixelSampled[0];
+             const dy = pixelExactY - pixelSampled[1];
+             const err = Math.hypot(dx, dy);
+-            if (err > maxError) {
+-                maxError = err;
++            // NaN arises when a vertex or sample point is outside the CRS domain
++            // (e.g. beyond the Mollweide ellipse). Treat it as Infinity so the
++            // triangle is always selected for subdivision — sub-triangles whose
++            // mid-points fall inside the domain will get finite errors and
++            // converge normally, progressively uncovering the valid area.
++            const safeErr = Number.isFinite(err) ? err : Infinity;
++            if (safeErr > maxError) {
++                maxError = safeErr;
+                 maxErrorU = uvSampleU;
+                 maxErrorV = uvSampleV;
+             }
