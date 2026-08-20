@@ -321,7 +321,7 @@ export default function App() {
             [west, south],
             [east, north],
           ],
-          { padding: 40, duration: 800 },
+          { padding: 40, duration: 0 },
         );
       },
     };

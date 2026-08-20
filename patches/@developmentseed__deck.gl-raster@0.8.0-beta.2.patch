@@ -1,8 +1,8 @@
 diff --git a/dist/raster-layer.js b/dist/raster-layer.js
-index d6fa2644fd0eb2ec06012a8587c6b1743c701370..52b3b88c1160dd757acb07487605e51de0d0caf0 100644
+index d6fa2644fd0eb2ec06012a8587c6b1743c701370..01bc558d3f60b84bea0c2b96d6844d207a79397d 100644
 --- a/dist/raster-layer.js
 +++ b/dist/raster-layer.js
-@@ -108,6 +108,36 @@ export class RasterLayer extends CompositeLayer {
+@@ -108,6 +108,49 @@ export class RasterLayer extends CompositeLayer {
          // To account for this, we add 1 to both width and height when generating
          // the mesh. This also solves obvious gaps in between neighboring tiles in
          // the COGLayer.
@@ -14,12 +14,25 @@ index d6fa2644fd0eb2ec06012a8587c6b1743c701370..52b3b88c1160dd757acb07487605e51d
 +        // "border tiles" up front and use a dense uniform grid instead: OOD-vertex
 +        // triangles are simply filtered out, producing a clean domain-edge cutoff
 +        // at predictable 1/(BORDER_GRID_SIZE) tile-fraction resolution.
-+        const { forwardTransform, forwardReproject } = reprojectionFns;
++        const { forwardTransform, forwardReproject, inverseReproject } = reprojectionFns;
 +        const borderCorners = [[0, 0], [1, 0], [0, 1], [1, 1]];
++        // Tile width in projected CRS units for the round-trip error threshold.
++        const tileWidthCRS = Math.abs(forwardTransform(width, 0)[0] - forwardTransform(0, 0)[0]);
++        const roundTripThreshold = tileWidthCRS * 0.01;
 +        const isBorderTile = borderCorners.some(([u, v]) => {
 +            const [ix, iy] = forwardTransform(u * width, v * height);
 +            const [ox, oy] = forwardReproject(ix, iy);
-+            return !Number.isFinite(ox) || !Number.isFinite(oy);
++            if (!Number.isFinite(ox) || !Number.isFinite(oy)) return true;
++            // Round-trip check: OOD Mollweide corners where projectTo3857 clamps to
++            // a finite domain-boundary position instead of NaN. The clamped value
++            // re-projects to a CRS position far from the original, revealing the OOD.
++            if (inverseReproject && roundTripThreshold > 0) {
++                const [ix2, iy2] = inverseReproject(ox, oy);
++                if (!Number.isFinite(ix2) || !Number.isFinite(iy2)) return true;
++                const err = Math.sqrt((ix2 - ix) * (ix2 - ix) + (iy2 - iy) * (iy2 - iy));
++                if (err > roundTripThreshold) return true;
++            }
++            return false;
 +        });
 +        if (isBorderTile) {
 +            const { indices, positions64High, positions64Low, texCoords } = buildClippedGridMesh(reprojectionFns, width + 1, height + 1);
@@ -39,7 +52,7 @@ index d6fa2644fd0eb2ec06012a8587c6b1743c701370..52b3b88c1160dd757acb07487605e51d
          const reprojector = new RasterReprojector(reprojectionFns, width + 1, height + 1, { initialTriangulation });
          reprojector.run(maxError);
          const { indices, positions64High, positions64Low, texCoords } = reprojectorToMesh(reprojector);
-@@ -197,17 +227,36 @@ function reprojectorToMesh(reprojector) {
+@@ -197,17 +240,36 @@ function reprojectorToMesh(reprojector) {
      const numVertices = reprojector.uvs.length / 2;
      const texCoords = new Float32Array(reprojector.uvs);
      const positions = new Float64Array(numVertices * 3);
@@ -80,7 +93,7 @@ index d6fa2644fd0eb2ec06012a8587c6b1743c701370..52b3b88c1160dd757acb07487605e51d
      return {
          indices,
          positions64High,
-@@ -215,4 +264,60 @@ function reprojectorToMesh(reprojector) {
+@@ -215,4 +277,73 @@ function reprojectorToMesh(reprojector) {
          texCoords,
      };
  }
@@ -94,13 +107,16 @@ index d6fa2644fd0eb2ec06012a8587c6b1743c701370..52b3b88c1160dd757acb07487605e51d
 + */
 +const BORDER_GRID_SIZE = 64;
 +function buildClippedGridMesh(reprojectionFns, width, height, gridSize = BORDER_GRID_SIZE) {
-+    const { forwardTransform, forwardReproject } = reprojectionFns;
++    const { forwardTransform, forwardReproject, inverseReproject } = reprojectionFns;
 +    const cols = gridSize;
 +    const rows = gridSize;
 +    const numVerts = (cols + 1) * (rows + 1);
 +    const positions = new Float64Array(numVerts * 3);
 +    const texCoords = new Float32Array(numVerts * 2);
 +    const isOOD = new Uint8Array(numVerts);
++    // Tile CRS width for round-trip error threshold (same logic as isBorderTile).
++    const tileWidthCRS = Math.abs(forwardTransform(width - 1, 0)[0] - forwardTransform(0, 0)[0]);
++    const roundTripThreshold = tileWidthCRS * 0.01;
 +    let vi = 0;
 +    for (let r = 0; r <= rows; r++) {
 +        for (let c = 0; c <= cols; c++) {
@@ -115,7 +131,17 @@ index d6fa2644fd0eb2ec06012a8587c6b1743c701370..52b3b88c1160dd757acb07487605e51d
 +            positions[vi * 3 + 2] = 0;
 +            texCoords[vi * 2] = u;
 +            texCoords[vi * 2 + 1] = v;
-+            if (!Number.isFinite(ox) || !Number.isFinite(oy)) {
++            let ood = !Number.isFinite(ox) || !Number.isFinite(oy);
++            if (!ood && inverseReproject && roundTripThreshold > 0) {
++                const [ix2, iy2] = inverseReproject(ox, oy);
++                if (!Number.isFinite(ix2) || !Number.isFinite(iy2)) {
++                    ood = true;
++                } else {
++                    const err = Math.sqrt((ix2 - ix) * (ix2 - ix) + (iy2 - iy) * (iy2 - iy));
++                    if (err > roundTripThreshold) ood = true;
++                }
++            }
++            if (ood) {
 +                isOOD[vi] = 1;
 +            }
 +            vi++;
@@ -142,6 +168,22 @@ index d6fa2644fd0eb2ec06012a8587c6b1743c701370..52b3b88c1160dd757acb07487605e51d
 +}
  //# sourceMappingURL=raster-layer.js.map
 \ No newline at end of file
+diff --git a/dist/raster-tile-layer/raster-tile-layer.js b/dist/raster-tile-layer/raster-tile-layer.js
+index 106429fb94bc7dbc16bedcee53e4d4aa8c8364c3..d3740d2bdc825365d44b10a75c63e06dc2021014 100644
+--- a/dist/raster-tile-layer/raster-tile-layer.js
++++ b/dist/raster-tile-layer/raster-tile-layer.js
+@@ -203,6 +203,11 @@ export class RasterTileLayer extends CompositeLayer {
+                 inverseTransform,
+                 forwardReproject: _projectPosition,
+                 inverseReproject: _unprojectPosition,
++                // projectTo4326 returns NaN for points outside the CRS valid domain
++                // (e.g. beyond the Mollweide ellipse), even when projectTo3857
++                // extrapolates them to finite ±180° values. Used by isBorderTile and
++                // buildClippedGridMesh to reliably detect OOD vertices.
++                checkDomain: descriptor.projectTo4326,
+             };
+             coordinateSystem = "cartesian";
+         }
 diff --git a/dist/raster-tileset/affine-tileset-level.js b/dist/raster-tileset/affine-tileset-level.js
 index 213d5fb3bb7a2ab4ca36936339f17230ce869ba4..fb3c0a8036471cd7ebcaff82d6859f3a50d69230 100644
 --- a/dist/raster-tileset/affine-tileset-level.js
@@ -173,7 +215,7 @@ index 213d5fb3bb7a2ab4ca36936339f17230ce869ba4..fb3c0a8036471cd7ebcaff82d6859f3a
      }
      tileTransform(col, row) {
 diff --git a/dist/raster-tileset/raster-tile-traversal.js b/dist/raster-tileset/raster-tile-traversal.js
-index d62c5e4e2ae585a83f1b7b52f43a5580a44d2fa4..67b615a861bc4ccf2acf71eb3c804458b02ad867 100644
+index d62c5e4e2ae585a83f1b7b52f43a5580a44d2fa4..d2962e8b83a642787ac68f6b2e5864dafe53ddd1 100644
 --- a/dist/raster-tileset/raster-tile-traversal.js
 +++ b/dist/raster-tileset/raster-tile-traversal.js
 @@ -374,21 +374,33 @@ export class RasterTileNode {
@@ -242,28 +284,15 @@ index d62c5e4e2ae585a83f1b7b52f43a5580a44d2fa4..67b615a861bc4ccf2acf71eb3c804458
              commonSpaceBounds,
          };
      }
-@@ -672,12 +696,15 @@ export function getTileIndices(descriptor, opts) {
+@@ -672,6 +696,8 @@ export function getTileIndices(descriptor, opts) {
      const [minLng, minLat, maxLng, maxLat] = wgs84Bounds;
      const bottomLeft = lngLatToWorld([minLng, minLat]);
      const topRight = lngLatToWorld([maxLng, maxLat]);
--    const bounds = [
--        bottomLeft[0],
--        bottomLeft[1],
--        topRight[0],
--        topRight[1],
--    ];
-+    // lngLatToWorld uses screen y-convention (y=0 at north, y=512 at south), but
-+    // commonSpaceBounds uses GL y-convention (y=0 at south, y=512 at north) via
-+    // rescaleEPSG3857ToCommonSpace. Flip y here so insideBounds compares the same axis.
-+    const bounds = [
-+        bottomLeft[0],
-+        TILE_SIZE - bottomLeft[1],
-+        topRight[0],
-+        TILE_SIZE - topRight[1],
-+    ];
-     const roots = createRootTiles({
-         descriptor,
-         viewport,
++    // lngLatToWorld uses the same GL y-convention as rescaleEPSG3857ToCommonSpace
++    // (y=0 at south, y=512 at north), so bounds can be constructed directly.
+     const bounds = [
+         bottomLeft[0],
+         bottomLeft[1],
 diff --git a/dist/raster-tileset/raster-tileset-2d.js b/dist/raster-tileset/raster-tileset-2d.js
 index bdfce4655c03a6d7e83c7e00c42937a9292b145c..6e0be34894564885de9867869a509a9feb8748ff 100644
 --- a/dist/raster-tileset/raster-tileset-2d.js

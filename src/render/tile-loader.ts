@@ -199,7 +199,20 @@ export function makeMultiBandTileLoader(bandIndexes: number[]) {
       // propagate untouched. Any other failure is a real render error the
       // user should see; report it, then re-throw so deck.gl still marks the
       // tile failed rather than caching a broken result.
-      if (!isAbortError(err)) tileErrorHandler?.(err);
+      if (!isAbortError(err)) {
+        // "Tile at (x, y) not found" means this tile simply doesn't exist in the
+        // COG (e.g. Mollweide ellipse corner tiles outside the projection domain).
+        // Return null so deck.gl treats the tile as empty/transparent rather than
+        // failed — a failed tile triggers the parent-tile fallback which paints
+        // coarse full-world data as a visual artifact over the correct tiles.
+        if (
+          err instanceof Error &&
+          /^tile at \(\d+, \d+\) not found$/i.test(err.message)
+        ) {
+          return null as unknown as MultiBandTileData;
+        }
+        tileErrorHandler?.(err);
+      }
       throw err;
     }
   };
