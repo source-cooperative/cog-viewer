@@ -14,6 +14,7 @@ import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
 import { isDarkChrome, resolveBasemap } from "./basemaps";
 import { loadGeoTIFF } from "./cog/load-geotiff";
+import { normalizeUrl } from "./cog/normalize-url";
 import { validateCog } from "./cog/validate";
 import { ControlsPanel } from "./components/ControlsPanel";
 import { EmptyState } from "./components/EmptyState";
@@ -160,7 +161,7 @@ export default function App() {
     let cancelled = false;
     (async () => {
       try {
-        const tiff = await loadGeoTIFF(url);
+        const tiff = await loadGeoTIFF(normalizeUrl(url));
         if (cancelled) return;
         // The file may open as a valid TIFF yet not be a renderable COG (e.g.
         // striped/non-tiled). Reject those up front with a clear message —
