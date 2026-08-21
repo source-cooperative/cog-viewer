@@ -65,7 +65,7 @@ function createTestCog(): Buffer {
   entry(325, 4, 1, TILE_BYTES);    // TileByteCounts
   entry(33550, 12, 3, MPS_OFF);    // ModelPixelScaleTag
   entry(33922, 12, 6, MTP_OFF);    // ModelTiepointTag
-  entry(34736, 3, 16, GKD_OFF);    // GeoKeyDirectoryTag
+  entry(34735, 3, 16, GKD_OFF);    // GeoKeyDirectoryTag (34735, not 34736=GeoDoubleParams)
 
   buf.writeUInt32LE(0, p); // next IFD = none
 
