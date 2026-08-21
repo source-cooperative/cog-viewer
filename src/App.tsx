@@ -96,11 +96,18 @@ const IMAGE_SPECIFIC_RESET = {
   rescale: null,
   colormap: null,
   nodata: null,
+  zoom: null,
+  latitude: null,
+  longitude: null,
 } as const;
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
   const [state, update] = useCogState();
+  // Captures the zoom value present in the URL at the time each COG URL was
+  // loaded. Non-null means the user shared a specific viewport, so we skip
+  // fitBounds and let the map restore to the shared position instead.
+  const urlZoomAtCogLoad = useRef<number | null>(state.zoom);
   const prefersDark = usePrefersDark();
   const [device, setDevice] = useState<Device | null>(null);
   const [colormapTexture, setColormapTexture] = useState<Texture | null>(null);
@@ -149,6 +156,7 @@ export default function App() {
   // size when the bucket doesn't expose Content-Range via CORS — leading to
   // malformed Range headers and a full-file download. See load-geotiff.ts.
   useEffect(() => {
+    urlZoomAtCogLoad.current = state.zoom;
     setGeotiff(null);
     setAutoStats(null);
     setBandCount(null);
@@ -316,6 +324,8 @@ export default function App() {
           setExtentValid(false);
           return;
         }
+        // Skip fitBounds when the URL already encodes a viewport (shared link).
+        if (urlZoomAtCogLoad.current !== null) return;
         const { west, south, east, north } = options.geographicBounds;
         mapRef.current?.fitBounds(
           [
@@ -355,8 +365,16 @@ export default function App() {
     <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <MaplibreMap
         ref={mapRef}
-        initialViewState={{ longitude: 0, latitude: 0, zoom: 2 }}
+        initialViewState={{
+          longitude: state.longitude ?? 0,
+          latitude: state.latitude ?? 0,
+          zoom: state.zoom ?? 2,
+        }}
         mapStyle={resolveBasemap(state.basemap, prefersDark)}
+        onMoveEnd={(e) => {
+          const { longitude, latitude, zoom } = e.viewState;
+          update({ longitude, latitude, zoom });
+        }}
         onStyleData={(e) => {
           // styledata fires often (e.g., on tile arrival). Dedupe at the
           // setState level so we only re-render when the symbol id actually

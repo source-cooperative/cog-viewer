@@ -59,6 +59,12 @@ const parseGamma = (raw: string | null): number => {
   return n;
 };
 
+const parseViewport = (raw: string | null): number | null => {
+  if (raw === null || raw === "") return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+};
+
 export function parseCogState(p: URLSearchParams): CogState {
   const modeRaw = p.get("mode");
   const basemapRaw = p.get("basemap");
@@ -81,6 +87,9 @@ export function parseCogState(p: URLSearchParams): CogState {
     stretch: VALID_STRETCH.includes(p.get("stretch") as Stretch)
       ? (p.get("stretch") as Stretch)
       : "linear",
+    zoom: parseViewport(p.get("zoom")),
+    latitude: parseViewport(p.get("lat")),
+    longitude: parseViewport(p.get("lon")),
   };
 }
 
@@ -98,6 +107,9 @@ export function serializeCogState(s: CogState): URLSearchParams {
   if (s.gamma !== 1) p.set("gamma", String(s.gamma));
   if (!s.labelsAbove) p.set("labels", "below");
   if (s.stretch !== "linear") p.set("stretch", s.stretch);
+  if (s.zoom !== null) p.set("zoom", String(parseFloat(s.zoom.toFixed(2))));
+  if (s.latitude !== null) p.set("lat", String(parseFloat(s.latitude.toFixed(6))));
+  if (s.longitude !== null) p.set("lon", String(parseFloat(s.longitude.toFixed(6))));
   return p;
 }
 

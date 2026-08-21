@@ -93,6 +93,17 @@ describe("parseCogState", () => {
     expect(parseCogState(new URLSearchParams("gamma=abc")).gamma).toBe(1);
   });
 
+  it("parses viewport zoom/lat/lon; defaults to null when absent", () => {
+    expect(parseCogState(new URLSearchParams()).zoom).toBeNull();
+    expect(parseCogState(new URLSearchParams()).latitude).toBeNull();
+    expect(parseCogState(new URLSearchParams()).longitude).toBeNull();
+    const p = new URLSearchParams("zoom=8.5&lat=40.123456&lon=-74.654321");
+    const s = parseCogState(p);
+    expect(s.zoom).toBe(8.5);
+    expect(s.latitude).toBe(40.123456);
+    expect(s.longitude).toBe(-74.654321);
+  });
+
   it("parses labelsAbove; defaults true; only 'below' flips it", () => {
     expect(parseCogState(new URLSearchParams()).labelsAbove).toBe(true);
     expect(parseCogState(new URLSearchParams("labels=below")).labelsAbove).toBe(
@@ -117,6 +128,24 @@ describe("serializeCogState", () => {
     expect(parseCogState(out)).toEqual(s);
   });
 
+  it("serializes and round-trips viewport zoom/lat/lon", () => {
+    const original = new URLSearchParams("zoom=8.5&lat=40.123456&lon=-74.654321");
+    const s = parseCogState(original);
+    const out = serializeCogState(s);
+    expect(out.get("zoom")).toBe("8.5");
+    expect(out.get("lat")).toBe("40.123456");
+    expect(out.get("lon")).toBe("-74.654321");
+    expect(parseCogState(out)).toEqual(s);
+  });
+
+  it("omits viewport params when null", () => {
+    const s = parseCogState(new URLSearchParams("url=https://x.tif"));
+    const out = serializeCogState(s);
+    expect(out.has("zoom")).toBe(false);
+    expect(out.has("lat")).toBe(false);
+    expect(out.has("lon")).toBe(false);
+  });
+
   it("omits null fields", () => {
     const out = serializeCogState({
       url: "https://x.tif",
@@ -131,6 +160,9 @@ describe("serializeCogState", () => {
       gamma: 1,
       labelsAbove: true,
       stretch: "linear",
+      zoom: null,
+      latitude: null,
+      longitude: null,
     });
     expect(out.toString()).toBe("url=https%3A%2F%2Fx.tif");
   });
@@ -149,6 +181,9 @@ describe("serializeCogState", () => {
       gamma: 1,
       labelsAbove: true,
       stretch: "linear",
+      zoom: null,
+      latitude: null,
+      longitude: null,
     });
     expect(out.toString()).toBe("");
   });
@@ -166,6 +201,9 @@ describe("serializeCogState", () => {
       panel: "closed" as const,
       gamma: 1,
       stretch: "linear" as const,
+      zoom: null,
+      latitude: null,
+      longitude: null,
     };
     expect(
       serializeCogState({ ...base, labelsAbove: true }).toString(),
