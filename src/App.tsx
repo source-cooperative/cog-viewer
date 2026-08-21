@@ -77,7 +77,15 @@ function DeckGLOverlay(
   props: MapboxOverlayProps & { onDeviceInitialized?: (d: Device) => void },
 ) {
   const overlay = useControl<MapboxOverlay>(() => new MapboxOverlay(props));
-  overlay.setProps(props);
+  // setProps is called synchronously in the render body (react-map-gl pattern).
+  // _resolveLayers inside can throw when beforeId references a MapLibre layer
+  // that no longer exists — wrap so that transient style-reload races don't
+  // propagate to the React ErrorBoundary.
+  try {
+    overlay.setProps(props);
+  } catch (err) {
+    console.warn("[DeckGLOverlay] setProps failed:", err);
+  }
   return null;
 }
 

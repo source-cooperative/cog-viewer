@@ -17,13 +17,33 @@ if (import.meta.env.VITE_SENTRY_DSN) {
   });
 }
 
-function ErrorFallback() {
+function ErrorFallback({
+  error,
+  componentStack,
+}: {
+  error?: unknown;
+  componentStack?: string | null;
+}) {
+  const msg = error instanceof Error ? error.message : String(error ?? "Unknown error");
   return (
     <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", padding: 16 }}>
-      <div className="panel" style={{ padding: 24, width: "min(420px, 100%)", display: "grid", gap: 12 }}>
+      <div className="panel" style={{ padding: 24, width: "min(640px, 100%)", display: "grid", gap: 12 }}>
         <h2 style={{ margin: 0, fontWeight: 600, fontSize: 20 }}>Something went wrong</h2>
+        <pre style={{
+          fontSize: 11,
+          overflow: "auto",
+          maxHeight: 240,
+          background: "rgba(128,0,0,.08)",
+          padding: 8,
+          borderRadius: 4,
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-all",
+        }}>
+          {msg}
+          {componentStack ? `\n\nComponent stack:${componentStack}` : ""}
+        </pre>
         <span style={{ color: "var(--text-muted)", fontSize: 13 }}>
-          The viewer hit an unexpected error and has been notified. Reloading may help.
+          The viewer hit an unexpected error. Reloading may help.
         </span>
         <button type="button" className="primary" onClick={() => location.reload()}>
           Reload
@@ -35,7 +55,11 @@ function ErrorFallback() {
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <Sentry.ErrorBoundary fallback={<ErrorFallback />}>
+    <Sentry.ErrorBoundary
+      fallback={({ error, componentStack }) => (
+        <ErrorFallback error={error} componentStack={componentStack} />
+      )}
+    >
       <App />
     </Sentry.ErrorBoundary>
   </StrictMode>,
