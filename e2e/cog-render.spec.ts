@@ -153,9 +153,20 @@ test("COG tiles render for a valid 1-band WGS84 COG (regression #35)", async ({ 
     }
   });
 
+  // Capture app console output so CI failures have useful diagnostics.
+  const consoleLogs: string[] = [];
+  page.on("console", (msg) => {
+    if (msg.type() === "error" || msg.type() === "warning") {
+      consoleLogs.push(`[${msg.type()}] ${msg.text()}`);
+    }
+  });
+
   await page.goto(`/?url=${encodeURIComponent(FIXTURE_URL)}`);
 
-  // Wait for the single-band selector. It only appears after:
+  // Wait for the app to reach a terminal state: either the single-band selector
+  // appears (success) or an error toast appears (failure with a useful message).
+  //
+  // The selector appears after:
   //   1. loadGeoTIFF opens the file successfully
   //   2. COGLayer._parseGeoTIFF resolves the CRS and calls onGeoTIFFLoad
   //   3. onGeoTIFFLoad sets bandCount=1
@@ -164,10 +175,34 @@ test("COG tiles render for a valid 1-band WGS84 COG (regression #35)", async ({ 
   //
   // If extentValid is stuck at false (the #35 bug), step 2 never happens
   // because the COGLayer never enters the deck.gl overlay stack.
-  await expect(page.locator('select[aria-label="band"]')).toBeVisible({
-    timeout: 20_000,
-  });
+  await page
+    .waitForFunction(
+      () =>
+        document.querySelector('select[aria-label="band"]') !== null ||
+        document.querySelector('[role="alert"]') !== null,
+      { timeout: 20_000 },
+    )
+    .catch(() => {
+      const logSummary = consoleLogs.length
+        ? `\nConsole output:\n${consoleLogs.join("\n")}`
+        : "";
+      throw new Error(
+        `Timed out after 20 s waiting for band selector or error toast. ` +
+          `The COG may not have loaded (extentValid stuck at false = regression #35, ` +
+          `or loadGeoTIFF failed).${logSummary}`,
+      );
+    });
 
-  // No error toast should have appeared.
-  await expect(page.locator('[role="alert"]')).not.toBeVisible();
+  const errorAlert = page.locator('[role="alert"]');
+  if (await errorAlert.isVisible()) {
+    const msg = (await errorAlert.textContent()) ?? "(no text)";
+    throw new Error(
+      `App showed an error toast instead of rendering the COG: "${msg}"` +
+        (consoleLogs.length
+          ? `\nConsole output:\n${consoleLogs.join("\n")}`
+          : ""),
+    );
+  }
+
+  await expect(page.locator('select[aria-label="band"]')).toBeVisible();
 });
