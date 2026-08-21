@@ -116,11 +116,15 @@ export default function App() {
   const [bandCount, setBandCount] = useState<number | null>(null);
   const [bandNames, setBandNames] = useState<Map<number, string> | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // False when the COG's geographic extent couldn't be determined (unresolved
-  // or unsupported CRS). Gates the tile layer off so we don't paint mislocated
-  // tiles alongside the "could not determine geographic extent" error — the
-  // tile-placement path clamps coordinates and would otherwise draw anyway.
-  const [extentValid, setExtentValid] = useState(true);
+  // Starts false; set to true only after onGeoTIFFLoad confirms valid WGS84
+  // bounds. Keeping it false until CRS is proven safe prevents the deck.gl
+  // overlay layer from being in the MapLibre layer stack during async CRS
+  // resolution — resolveLayerGroups throws (crashing the React ErrorBoundary)
+  // when addLayer/moveLayer is called with a beforeId that no longer exists in
+  // the current style, which happens on every styledata event while the layer
+  // is present. For COGs with unsupported CRS the layer is never added because
+  // onGeoTIFFLoad is never reached.
+  const [extentValid, setExtentValid] = useState(false);
   // Non-blocking notice (e.g. a COG with no overviews) — rendered as an amber
   // Toast alongside the red error one; the two are mutually exclusive per load.
   const [warning, setWarning] = useState<string | null>(null);
@@ -163,7 +167,7 @@ export default function App() {
     setBandNames(null);
     setError(null);
     setWarning(null);
-    setExtentValid(true);
+    setExtentValid(false);
     const url = state.url;
     if (!url) return;
     let cancelled = false;
@@ -327,6 +331,9 @@ export default function App() {
           setExtentValid(false);
           return;
         }
+        // CRS resolved and bounds are valid — now safe to add the tile layer
+        // to the MapLibre stack (beforeId won't be stale at this point).
+        setExtentValid(true);
         // Skip fitBounds when the URL already encodes a viewport (shared link).
         if (urlZoomAtCogLoad.current !== null) return;
         const { west, south, east, north } = options.geographicBounds;
