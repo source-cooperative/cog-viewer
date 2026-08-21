@@ -16,3 +16,10 @@ export function normalizeUrl(url: string): string {
   }
   return url;
 }
+
+export function isSourceCoopUrl(url: string): boolean {
+  return (
+    url.startsWith("https://source.coop/") ||
+    url.startsWith("https://data.source.coop/")
+  );
+}

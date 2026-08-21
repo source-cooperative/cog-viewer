@@ -14,7 +14,7 @@ import type { MapRef } from "react-map-gl/maplibre";
 import { Map as MaplibreMap, useControl } from "react-map-gl/maplibre";
 import { isDarkChrome, resolveBasemap } from "./basemaps";
 import { loadGeoTIFF } from "./cog/load-geotiff";
-import { normalizeUrl } from "./cog/normalize-url";
+import { isSourceCoopUrl, normalizeUrl } from "./cog/normalize-url";
 import { validateCog } from "./cog/validate";
 import { ControlsPanel } from "./components/ControlsPanel";
 import { EmptyState } from "./components/EmptyState";
@@ -295,6 +295,7 @@ export default function App() {
       id: "cog",
       geotiff,
       epsgResolver: robustEpsgResolver,
+      ...(state.url && isSourceCoopUrl(state.url) ? { maxRequests: 20 } : {}),
       opacity: state.opacity,
       getTileData,
       renderTile,
@@ -340,6 +341,7 @@ export default function App() {
   }, [
     geotiff,
     autoStats,
+    state.url,
     state.opacity,
     state.mode,
     state.bands,
