@@ -49,7 +49,7 @@ jobs:
     if: failure() && github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       pull-requests: write
       actions: read
       id-token: write
@@ -58,6 +58,13 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
 
       - uses: anthropics/claude-code-action@v1
         env:
@@ -68,9 +75,8 @@ jobs:
             CI failed on PR #${{ github.event.pull_request.number }}.
 
             1. Run `gh run view ${{ github.run_id }} --log-failed` to read the exact failing output.
-            2. Run `git log --oneline -5` and `git diff origin/${{ github.base_ref }}...HEAD --stat` to see what changed.
-            3. Identify the root cause from the logs and the diff.
-            4. Post a concise PR comment with `gh pr comment ${{ github.event.pull_request.number }} --body "..."` that names the failing job/step, quotes the key error line(s), and explains what needs to be fixed.
-          claude_args: >-
-            --allowedTools
-            "Bash(gh run view:*),Bash(gh pr comment:*),Bash(git log:*),Bash(git diff:*),Bash(git show:*)"
+            2. Run `git log --oneline -5` and `git diff origin/${{ github.base_ref }}...HEAD --stat` to understand what changed.
+            3. Identify the root cause and fix it by editing the relevant source files.
+            4. Verify the fix locally: run `pnpm test` for unit failures or `pnpm build` for build failures. Do NOT run `pnpm test:e2e` (no browser in this environment).
+            5. Commit with `git add <files> && git commit -m "fix: <short description>"` and push with `git push`.
+            6. Post a PR comment with `gh pr comment ${{ github.event.pull_request.number }} --body "..."` summarising what failed, what you changed, and why.
