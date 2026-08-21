@@ -25,6 +25,10 @@ export type CogState = {
   labelsAbove: boolean;
   /** Curve applied to rescaled values. "linear" by default. */
   stretch: Stretch;
+  /** Map viewport — null means not set in URL (fit to COG bounds on load). */
+  zoom: number | null;
+  latitude: number | null;
+  longitude: number | null;
 };
 
 export type CogStateUpdate = Partial<
