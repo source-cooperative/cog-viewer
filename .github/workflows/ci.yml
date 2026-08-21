@@ -41,3 +41,35 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 14
+
+  analyze-failure:
+    name: Analyze failure
+    needs: [unit, e2e]
+    # Only on PRs — push-to-main failures have no PR to comment on.
+    if: failure() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          direct_prompt: |
+            CI failed on PR #${{ github.event.pull_request.number }}.
+
+            1. Run `gh run view ${{ github.run_id }} --log-failed` to read the exact failing output.
+            2. Run `git log --oneline -5` and `git diff origin/${{ github.base_ref }}...HEAD --stat` to see what changed.
+            3. Identify the root cause from the logs and the diff.
+            4. Post a concise PR comment with `gh pr comment ${{ github.event.pull_request.number }} --body "..."` that names the failing job/step, quotes the key error line(s), and explains what needs to be fixed.
+          claude_args: >-
+            --allowedTools
+            "Bash(gh run view:*),Bash(gh pr comment:*),Bash(git log:*),Bash(git diff:*),Bash(git show:*)"
