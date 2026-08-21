@@ -69,7 +69,7 @@ export function parseCogState(p: URLSearchParams): CogState {
   const modeRaw = p.get("mode");
   const basemapRaw = p.get("basemap");
   return {
-    url: p.get("url"),
+    urls: p.getAll("url"),
     mode: VALID_MODES.includes(modeRaw as Mode) ? (modeRaw as Mode) : null,
     bands: parseBands(p.get("bands")),
     rescale: parseRescale(p.get("rescale")),
@@ -95,7 +95,7 @@ export function parseCogState(p: URLSearchParams): CogState {
 
 export function serializeCogState(s: CogState): URLSearchParams {
   const p = new URLSearchParams();
-  if (s.url) p.set("url", s.url);
+  for (const u of s.urls) p.append("url", u);
   if (s.mode) p.set("mode", s.mode);
   if (s.bands) p.set("bands", s.bands.join(","));
   if (s.rescale) p.set("rescale", s.rescale.map((r) => r.join(",")).join(";"));

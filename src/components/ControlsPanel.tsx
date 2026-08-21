@@ -528,7 +528,7 @@ export function ControlsPanel({
       <summary className="panel-header">Options</summary>
 
       <div className="panel-body">
-        {state.url && (
+        {state.urls.length > 0 && (
             <>
               {geotiff && (
                 <CollapsibleSection title="Metadata">
@@ -741,7 +741,7 @@ export function ControlsPanel({
               </label>
             </Field>
 
-            {state.url && (
+            {state.urls.length > 0 && (
               <Field
                 label={`Opacity (${state.opacity.toFixed(2)})`}
                 info={HELP.opacity}

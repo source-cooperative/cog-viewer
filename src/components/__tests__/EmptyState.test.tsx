@@ -12,19 +12,34 @@ describe("EmptyState", () => {
       "https://example.com/x.tif",
     );
     await userEvent.click(screen.getByRole("button", { name: /load/i }));
-    expect(onSubmit).toHaveBeenCalledWith("https://example.com/x.tif");
+    expect(onSubmit).toHaveBeenCalledWith(["https://example.com/x.tif"]);
   });
 
-  it("submits when user picks an example", async () => {
+  it("submits single-url example as one-element array", async () => {
     const onSubmit = vi.fn();
     render(<EmptyState onSubmit={onSubmit} />);
-    const exampleUrl =
-      "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2026/1/S2B_18TWL_20260101_0_L2A/TCI.tif";
+    // Pick the Sentinel-2 TCI single-band example by its visible title text
     await userEvent.selectOptions(
       screen.getByRole("combobox", { name: /example/i }),
-      exampleUrl,
+      "Sentinel-2 True Color (New York, 2026)",
     );
-    expect(onSubmit).toHaveBeenCalledWith(exampleUrl);
+    expect(onSubmit).toHaveBeenCalledWith([
+      "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2026/1/S2B_18TWL_20260101_0_L2A/TCI.tif",
+    ]);
+  });
+
+  it("submits multi-url example as full array", async () => {
+    const onSubmit = vi.fn();
+    render(<EmptyState onSubmit={onSubmit} />);
+    await userEvent.selectOptions(
+      screen.getByRole("combobox", { name: /example/i }),
+      "Sentinel-2 Multi-Band (New York, 2026) — B04/B03/B02",
+    );
+    expect(onSubmit).toHaveBeenCalledWith([
+      "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2026/1/S2B_18TWL_20260101_0_L2A/B04.tif",
+      "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2026/1/S2B_18TWL_20260101_0_L2A/B03.tif",
+      "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2026/1/S2B_18TWL_20260101_0_L2A/B02.tif",
+    ]);
   });
 
   it("converts a dropped/uploaded file to a blob URL and submits", async () => {
@@ -36,6 +51,6 @@ describe("EmptyState", () => {
     const file = new File(["fake-tiff-bytes"], "x.tif", { type: "image/tiff" });
     await userEvent.upload(screen.getByTestId("file-input"), file);
     expect(onSubmit).toHaveBeenCalledTimes(1);
-    expect(onSubmit.mock.calls[0][0]).toMatch(/^blob:/);
+    expect(onSubmit.mock.calls[0][0][0]).toMatch(/^blob:/);
   });
 });

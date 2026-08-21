@@ -10,7 +10,7 @@ export type PanelState = "open" | "closed";
 export type Stretch = "linear" | "log" | "sqrt";
 
 export type CogState = {
-  url: string | null;
+  urls: string[];
   mode: Mode | null;
   bands: number[] | null;
   rescale: [number, number][] | null;

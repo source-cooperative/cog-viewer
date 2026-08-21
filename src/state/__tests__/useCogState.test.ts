@@ -5,7 +5,7 @@ import { parseCogState, serializeCogState, useCogState } from "../useCogState";
 describe("parseCogState", () => {
   it("returns nulls for empty params", () => {
     const s = parseCogState(new URLSearchParams());
-    expect(s.url).toBeNull();
+    expect(s.urls).toEqual([]);
     expect(s.mode).toBeNull();
     expect(s.bands).toBeNull();
     expect(s.rescale).toBeNull();
@@ -17,7 +17,7 @@ describe("parseCogState", () => {
       "url=https://x/y.tif&mode=rgb&bands=4,3,2&rescale=0,3000;0,3000;0,3000",
     );
     const s = parseCogState(p);
-    expect(s.url).toBe("https://x/y.tif");
+    expect(s.urls).toEqual(["https://x/y.tif"]);
     expect(s.mode).toBe("rgb");
     expect(s.bands).toEqual([4, 3, 2]);
     expect(s.rescale).toEqual([
@@ -148,7 +148,7 @@ describe("serializeCogState", () => {
 
   it("omits null fields", () => {
     const out = serializeCogState({
-      url: "https://x.tif",
+      urls: ["https://x.tif"],
       mode: null,
       bands: null,
       rescale: null,
@@ -169,7 +169,7 @@ describe("serializeCogState", () => {
 
   it("omits opacity when 1", () => {
     const out = serializeCogState({
-      url: null,
+      urls: [],
       mode: null,
       bands: null,
       rescale: null,
@@ -190,7 +190,7 @@ describe("serializeCogState", () => {
 
   it("emits labels=below only when labelsAbove is false", () => {
     const base = {
-      url: null,
+      urls: [],
       mode: null,
       bands: null,
       rescale: null,
@@ -218,8 +218,8 @@ describe("useCogState subscription", () => {
   it("re-renders when update() is called", () => {
     window.history.replaceState(null, "", "/");
     const { result } = renderHook(() => useCogState());
-    expect(result.current[0].url).toBeNull();
-    act(() => result.current[1]({ url: "https://x.tif" }));
-    expect(result.current[0].url).toBe("https://x.tif");
+    expect(result.current[0].urls).toEqual([]);
+    act(() => result.current[1]({ urls: ["https://x.tif"] }));
+    expect(result.current[0].urls).toEqual(["https://x.tif"]);
   });
 });
