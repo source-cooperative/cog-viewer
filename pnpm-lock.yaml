@@ -6,7 +6,7 @@ settings:
 
 patchedDependencies:
   '@developmentseed/deck.gl-geotiff@0.8.0-beta.2':
-    hash: a005aed0dae1e16e47c1ad7bdce641e684c8d820e25f56e29d75ba5bbeb55478
+    hash: 4494618588bfff1d5a9b53fd6ec194dba1cb4331ef781cc6fe833ae4d936f620
     path: patches/@developmentseed__deck.gl-geotiff@0.8.0-beta.2.patch
   '@developmentseed/deck.gl-raster@0.8.0-beta.2':
     hash: ef57ca0be37d5d1ca42d52bdc456a0d69943fb2e27c4ce1442b472c7b72d8326
@@ -39,7 +39,7 @@ importers:
         version: 9.3.2(@deck.gl/core@9.3.2)(@luma.gl/core@9.3.3)(@math.gl/web-mercator@4.1.0)
       '@developmentseed/deck.gl-geotiff':
         specifier: 0.8.0-beta.2
-        version: 0.8.0-beta.2(patch_hash=a005aed0dae1e16e47c1ad7bdce641e684c8d820e25f56e29d75ba5bbeb55478)(71285630fbe21754b1ea3701085edd16)
+        version: 0.8.0-beta.2(patch_hash=4494618588bfff1d5a9b53fd6ec194dba1cb4331ef781cc6fe833ae4d936f620)(71285630fbe21754b1ea3701085edd16)
       '@developmentseed/deck.gl-raster':
         specifier: 0.8.0-beta.2
         version: 0.8.0-beta.2(patch_hash=ef57ca0be37d5d1ca42d52bdc456a0d69943fb2e27c4ce1442b472c7b72d8326)(fd4a5c6fd4c0032b3658765a2c789c53)
@@ -2242,7 +2242,7 @@ snapshots:
 
   '@developmentseed/affine@0.8.0-beta.2': {}
 
-  '@developmentseed/deck.gl-geotiff@0.8.0-beta.2(patch_hash=a005aed0dae1e16e47c1ad7bdce641e684c8d820e25f56e29d75ba5bbeb55478)(71285630fbe21754b1ea3701085edd16)':
+  '@developmentseed/deck.gl-geotiff@0.8.0-beta.2(patch_hash=4494618588bfff1d5a9b53fd6ec194dba1cb4331ef781cc6fe833ae4d936f620)(71285630fbe21754b1ea3701085edd16)':
     dependencies:
       '@cogeotiff/core': 9.5.0
       '@deck.gl/core': 9.3.2

@@ -1,3 +1,46 @@
+diff --git a/dist/cog-layer.d.ts b/dist/cog-layer.d.ts
+index 167756a51946449f1be2f864f61a5edd36e5bf9e..9b16cc3ce84dce32539fd5d9e1fc12de9e39b2ad 100644
+--- a/dist/cog-layer.d.ts
++++ b/dist/cog-layer.d.ts
+@@ -85,6 +85,13 @@ export type COGLayerProps<DataT extends MinimalTileData = DefaultDataT> = Omit<R
+             north: number;
+         };
+     }) => void;
++    /**
++     * Called when CRS parsing or projection setup fails and the layer cannot
++     * be rendered.  Provides a hook to surface the error to the user without
++     * relying on the browser's unhandledrejection event (which may be
++     * intercepted by error-monitoring tools before the app sees it).
++     */
++    onError?: (err: unknown) => void;
+     /** A user-provided AbortSignal to cancel loading.
+      *
+      * This can be useful in combination with the MosaicLayer, so that when a
+diff --git a/dist/cog-layer.js b/dist/cog-layer.js
+index 3cd2714260086e7c8978d459af6716b8469103b5..01f7fc6871f15afbe346fc929b4b2be25d13ba2b 100644
+--- a/dist/cog-layer.js
++++ b/dist/cog-layer.js
+@@ -20,6 +20,7 @@ export class COGLayer extends RasterTileLayer {
+         ...RasterTileLayer.defaultProps,
+         epsgResolver,
+         concurrencyLimiter: DEFAULT_CONCURRENCY_LIMITER,
++        onError: null,
+     };
+     initializeState() {
+         this.setState({ abortController: new AbortController() });
+@@ -36,7 +37,11 @@ export class COGLayer extends RasterTileLayer {
+             // Clear stale state so renderLayers returns null until the new GeoTIFF is
+             // ready
+             this.clearState();
+-            this._parseGeoTIFF();
++            this._parseGeoTIFF().catch(err => {
++                if (!this.state.abortController?.signal?.aborted) {
++                    this.props.onError?.(err);
++                }
++            });
+         }
+     }
+     clearState() {
 diff --git a/dist/geotiff/geotiff.js b/dist/geotiff/geotiff.js
 index b07748d892c3f174650047cbae6285ab5fa94efa..471b81549f455a4c5f33c0685d5ba5c9f2261934 100644
 --- a/dist/geotiff/geotiff.js

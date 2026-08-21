@@ -300,6 +300,9 @@ export default function App() {
       renderTile,
       beforeId:
         state.labelsAbove && labelsAvailable ? firstSymbolId : undefined,
+      onError: (err: unknown) => {
+        setError((prev) => prev ?? humanizeError(err));
+      },
       onGeoTIFFLoad: (
         tiff: GeoTIFF,
         options: {
