@@ -161,7 +161,9 @@ test("COG tiles render for a valid 1-band WGS84 COG (regression #35)", async ({ 
     }
   });
 
-  await page.goto(`/?url=${encodeURIComponent(FIXTURE_URL)}`);
+  // panel=open ensures the controls panel is open so the band selector is
+  // not hidden inside a closed <details> element.
+  await page.goto(`/?url=${encodeURIComponent(FIXTURE_URL)}&panel=open`);
 
   // Wait for the app to reach a terminal state: either the single-band selector
   // appears (success) or an error toast appears (failure with a useful message).
