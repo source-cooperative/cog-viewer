@@ -80,6 +80,12 @@ export function humanizeError(
     return "This GeoTIFF is stored in strips, not internal tiles — it isn't a Cloud Optimized GeoTIFF, so the viewer can't stream it. Re-encode it as a COG with internal tiling and overviews.";
   }
   if (
+    lower.includes("coordinate transformation") ||
+    lower.includes("transformation type")
+  ) {
+    return "This COG uses a coordinate reference system the viewer cannot reproject. The projection type is not supported.";
+  }
+  if (
     lower.includes("unsupported") ||
     lower.includes("compression") ||
     lower.includes("decode")

@@ -13,6 +13,14 @@ describe("humanizeError", () => {
     expect(msg).toMatch(/decode|compression/i);
   });
 
+  it("maps a proj4js unsupported coordinate transformation error to a CRS message, not a compression message", () => {
+    const msg = humanizeError(
+      new Error("Unsupported coordinate transformation type: 28"),
+    );
+    expect(msg).toMatch(/coordinate reference system|projection|reproject/i);
+    expect(msg).not.toMatch(/compression/i);
+  });
+
   it("maps a bare browser 'Failed to fetch' to the CORS guidance message", () => {
     const msg = humanizeError(new Error("Failed to fetch"));
     expect(msg).toMatch(/cors/i);
