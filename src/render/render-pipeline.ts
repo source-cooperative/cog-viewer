@@ -98,7 +98,7 @@ function effectiveRescale(
 /** Push the optional adjustments common to RGB and single-band modes,
  * in canonical order: stretch curve → gamma. Both expect input clamped
  * to 0..1, which the preceding rescale module guarantees. */
-function pushAdjustments(state: CogState, pipeline: RasterModule[]): void {
+export function pushAdjustments(state: CogState, pipeline: RasterModule[]): void {
   if (state.stretch === "log") {
     pipeline.push({ module: LogStretch, props: { strength: 99 } });
   } else if (state.stretch === "sqrt") {

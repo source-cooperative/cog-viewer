@@ -25,6 +25,7 @@ import { selectOverlayLayers } from "./geo/overlay-layers";
 import {
   buildRgbCompositeRenderTile,
   buildSingleCompositeRenderTile,
+  pushAdjustments,
 } from "./render/render-pipeline";
 import {
   computeAutoStats,
@@ -413,6 +414,7 @@ export default function App() {
       const renderPipeline = rescaleProps
         ? [{ module: PerBandLinearRescale, props: rescaleProps }]
         : [];
+      pushAdjustments(state, renderPipeline);
       const multiProps = {
         id: "multi-cog",
         sources,
@@ -483,6 +485,7 @@ export default function App() {
     state.nodata,
     state.colormap,
     state.gamma,
+    state.stretch,
     state.labelsAbove,
     state.basemap,
     firstSymbolId,
