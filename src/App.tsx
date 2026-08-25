@@ -36,7 +36,7 @@ import {
   MAX_BAND_SLOTS,
   setTileErrorHandler,
 } from "./render/tile-loader";
-import { useCogState } from "./state/useCogState";
+import { urlsKey, useCogState } from "./state/useCogState";
 
 // Get the default epsgResolver from COGLayer's defaultProps so the wrapper has
 // a stable identity (module scope = no re-creation on every render).
@@ -161,6 +161,11 @@ export default function App() {
   // late-arriving bandCount from clobbering an explicit user mode pick made
   // between the URL change and metadata load.
   const autoModeFiredFor = useRef<string | null>(null);
+  // Stable string key for the current URL list. Used as effect/memo dep
+  // instead of state.urls (array reference) so that viewport/mode/band
+  // changes — which produce a new state object but the same URLs — do not
+  // trigger spurious GeoTIFF reloads. See useCogState.ts for details.
+  const cogUrlsKey = urlsKey(state);
 
   // Drop blob: URLs from prior drag-drop sessions on initial mount — they
   // can't survive a reload, so the map would otherwise show a stuck broken
@@ -215,7 +220,10 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [state.urls]);
+    // cogUrlsKey is a stable string derived from state.urls — prevents
+    // re-running when viewport/mode params change but COG URLs stay the same.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cogUrlsKey]);
 
   // Surface tile fetch/decode failures (which deck.gl otherwise swallows) as a
   // user-facing error. Registered once; the handler reads setError, which is
@@ -274,7 +282,7 @@ export default function App() {
       // 1 or 2 bands → single + colormap. RGB on 2 bands leaves blue empty.
       update({ mode: "single", bands: [1] });
     }
-  }, [bandCount, state.urls, state.mode, update]);
+  }, [bandCount, cogUrlsKey, state.mode, update]);
 
   useEffect(() => {
     if (!device) return;
@@ -394,7 +402,7 @@ export default function App() {
   }, [
     geotiff,
     autoStats,
-    state.urls,
+    cogUrlsKey,
     state.opacity,
     state.mode,
     state.bands,

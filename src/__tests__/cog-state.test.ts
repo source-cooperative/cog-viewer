@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseCogState, serializeCogState } from "../state/useCogState";
+import { parseCogState, serializeCogState, urlsKey } from "../state/useCogState";
 
 const base = {
   mode: null,
@@ -17,6 +17,27 @@ const base = {
   latitude: null,
   longitude: null,
 };
+
+describe("urlsKey", () => {
+  it("produces identical strings when url list is the same but viewport params differ", () => {
+    // This is the regression test for the array-reference dep bug:
+    // parsing ?url=a.tif and ?url=a.tif&lat=40&zoom=8 should give the
+    // same urlsKey so effects gated on urlsKey don't re-run on viewport changes.
+    const withUrl = new URLSearchParams("url=https://example.com/a.tif");
+    const withUrlAndViewport = new URLSearchParams(
+      "url=https://example.com/a.tif&lat=40.1&lon=-74.2&zoom=8.5",
+    );
+    expect(urlsKey(parseCogState(withUrl))).toBe(
+      urlsKey(parseCogState(withUrlAndViewport)),
+    );
+  });
+
+  it("produces different strings when the url list changes", () => {
+    const one = new URLSearchParams("url=https://example.com/a.tif");
+    const two = new URLSearchParams("url=https://example.com/b.tif");
+    expect(urlsKey(parseCogState(one))).not.toBe(urlsKey(parseCogState(two)));
+  });
+});
 
 describe("parseCogState — urls", () => {
   it("returns empty urls when no url param is present", () => {
