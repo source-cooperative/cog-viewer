@@ -4,6 +4,7 @@ import { COGLayer, MultiCOGLayer } from "@developmentseed/deck.gl-geotiff";
 import {
   createColormapTexture,
   decodeColormapSprite,
+  LinearRescale,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import colormapsPngUrl from "@developmentseed/deck.gl-raster/gpu-modules/colormaps.png";
 import type { GeoTIFF } from "@developmentseed/geotiff";
@@ -28,6 +29,7 @@ import {
 } from "./render/render-pipeline";
 import {
   computeAutoStats,
+  percentileFromHistogram,
   readBandNames,
   type AutoStats,
 } from "./render/stats";
@@ -166,6 +168,18 @@ export default function App() {
   // changes — which produce a new state object but the same URLs — do not
   // trigger spurious GeoTIFF reloads. See useCogState.ts for details.
   const cogUrlsKey = urlsKey(state);
+  // Stable sources/keys for multi-COG — memoized independently of autoStats
+  // so that MultiCOGLayer.updateState sees props.sources === oldProps.sources
+  // on every autoStats update, preventing an expensive re-open of all COG
+  // headers just to change the renderPipeline rescale step.
+  const multiSources = useMemo(() => {
+    if (state.urls.length <= 1) return null;
+    const keys = state.urls.map(urlKey);
+    const sources: Record<string, { url: string }> = {};
+    state.urls.forEach((url, i) => { sources[keys[i]] = { url }; });
+    return { sources, keys };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cogUrlsKey]);
 
   // Drop blob: URLs from prior drag-drop sessions on initial mount — they
   // can't survive a reload, so the map would otherwise show a stuck broken
@@ -191,10 +205,31 @@ export default function App() {
     setError(null);
     setWarning(null);
     setExtentValid(true);
-    // Multi-COG: MultiCOGLayer opens all sources internally; skip manual load.
-    if (state.urls.length !== 1) return;
-    const url = state.urls[0];
+    if (state.urls.length === 0) return;
     let cancelled = false;
+    if (state.urls.length > 1) {
+      // Multi-COG: MultiCOGLayer handles tile fetching for all sources.
+      // Load the primary source here only to compute auto-stats so the
+      // renderPipeline can include a LinearRescale step.
+      const ctrl = new AbortController();
+      (async () => {
+        try {
+          const tiff = await loadGeoTIFF(normalizeUrl(state.urls[0]));
+          if (cancelled) return;
+          const stats = await computeAutoStats(tiff, ctrl.signal, (partial) => {
+            if (!ctrl.signal.aborted) setAutoStats(partial);
+          });
+          if (!ctrl.signal.aborted) setAutoStats(stats);
+        } catch (err) {
+          if (!cancelled) console.warn("multi-COG auto-stats failed", err);
+        }
+      })();
+      return () => {
+        cancelled = true;
+        ctrl.abort();
+      };
+    }
+    const url = state.urls[0];
     (async () => {
       try {
         const tiff = await loadGeoTIFF(normalizeUrl(url));
@@ -337,11 +372,29 @@ export default function App() {
     };
 
     // Multi-COG path: each URL is one source (one band from a separate file).
-    if (state.urls.length > 1) {
-      const keys = state.urls.map(urlKey);
-      const sources: Record<string, { url: string }> = {};
-      state.urls.forEach((url, i) => { sources[keys[i]] = { url }; });
+    // Uses the stable multiSources object (memoized on cogUrlsKey only) so
+    // that autoStats updates change only the renderPipeline without
+    // triggering a MultiCOGLayer source re-open.
+    if (multiSources) {
+      const { sources, keys } = multiSources;
       const composite = { r: keys[0], g: keys[1], b: keys[2] };
+      // LinearRescale: MultiCOGLayer uses r16unorm for uint16 data and r8unorm
+      // for uint8. If the sampled max > 255, treat as uint16 (÷ 65535);
+      // otherwise uint8 (÷ 255). The module runs after CompositeBands and
+      // remaps the GPU-normalized [0, 1] value into the visible range.
+      const renderPipeline = autoStats?.global
+        ? (() => {
+            const g = autoStats.global;
+            const sampleScale = g.max > 255 ? 65535 : 255;
+            return [{
+              module: LinearRescale,
+              props: {
+                rescaleMin: percentileFromHistogram(g, 0.02) / sampleScale,
+                rescaleMax: percentileFromHistogram(g, 0.98) / sampleScale,
+              },
+            }];
+          })()
+        : [];
       const multiProps = {
         id: "multi-cog",
         sources,
@@ -349,6 +402,7 @@ export default function App() {
         epsgResolver: robustEpsgResolver,
         opacity: state.opacity,
         beforeId,
+        renderPipeline,
         onGeoTIFFLoad: (
           sourcesMap: Map<string, GeoTIFF>,
           options: { geographicBounds: { west: number; south: number; east: number; north: number } },
@@ -402,6 +456,7 @@ export default function App() {
   }, [
     geotiff,
     autoStats,
+    multiSources,
     cogUrlsKey,
     state.opacity,
     state.mode,
