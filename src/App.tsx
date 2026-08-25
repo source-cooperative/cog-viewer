@@ -377,7 +377,12 @@ export default function App() {
     // triggering a MultiCOGLayer source re-open.
     if (multiSources) {
       const { sources, keys } = multiSources;
-      const composite = { r: keys[0], g: keys[1], b: keys[2] };
+      const bands = state.bands ?? [1, 2, 3];
+      const composite = {
+        r: keys[(bands[0] ?? 1) - 1] ?? keys[0],
+        g: keys[(bands[1] ?? 2) - 1] ?? keys[1],
+        b: keys[(bands[2] ?? 3) - 1] ?? keys[2],
+      };
       // PerBandLinearRescale: MultiCOGLayer uses r16unorm for uint16 data and
       // r8unorm for uint8. Detect sampleScale from autoStats (max > 255 → uint16
       // ÷ 65535; otherwise uint8 ÷ 255). Rescale values come from state.rescale
