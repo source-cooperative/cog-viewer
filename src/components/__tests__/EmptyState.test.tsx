@@ -21,10 +21,10 @@ describe("EmptyState", () => {
     // Pick the Sentinel-2 TCI single-band example by its visible title text
     await userEvent.selectOptions(
       screen.getByRole("combobox", { name: /example/i }),
-      "Sentinel-2 True Color (New York, 2026)",
+      "Sentinel-2 True Color (New York, 2024-08-14)",
     );
     expect(onSubmit).toHaveBeenCalledWith([
-      "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2026/1/S2B_18TWL_20260101_0_L2A/TCI.tif",
+      "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2024/8/S2A_18TWL_20240814_0_L2A/TCI.tif",
     ]);
   });
 
@@ -33,12 +33,12 @@ describe("EmptyState", () => {
     render(<EmptyState onSubmit={onSubmit} />);
     await userEvent.selectOptions(
       screen.getByRole("combobox", { name: /example/i }),
-      "Sentinel-2 Multi-Band (New York, 2026) — B04/B03/B02",
+      "Sentinel-2 Multi-Band (New York, 2024-08-14) — B04/B03/B02",
     );
     expect(onSubmit).toHaveBeenCalledWith([
-      "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2026/1/S2B_18TWL_20260101_0_L2A/B04.tif",
-      "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2026/1/S2B_18TWL_20260101_0_L2A/B03.tif",
-      "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2026/1/S2B_18TWL_20260101_0_L2A/B02.tif",
+      "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2024/8/S2A_18TWL_20240814_0_L2A/B04.tif",
+      "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2024/8/S2A_18TWL_20240814_0_L2A/B03.tif",
+      "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2024/8/S2A_18TWL_20240814_0_L2A/B02.tif",
     ]);
   });
 
