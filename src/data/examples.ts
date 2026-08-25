@@ -17,8 +17,8 @@ export const EXAMPLES: CogExample[] = [
     url: "https://data.source.coop/giswqs/tn-imagery/imagery/AndersonCo_OrthoPan_2ft_2000.tif",
   },
   {
-    title: "Sentinel-2 True Color (New York, 2026)",
-    url: "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2026/1/S2B_18TWL_20260101_0_L2A/TCI.tif",
+    title: "Sentinel-2 True Color (New York, 2024-08-14)",
+    url: "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2024/8/S2A_18TWL_20240814_0_L2A/TCI.tif",
   },
   {
     title: "New Zealand 2024-2025 10m RGB",
@@ -33,11 +33,11 @@ export const EXAMPLES: CogExample[] = [
     url: "https://ds-wheels.s3.us-east-1.amazonaws.com/Annual_NLCD_LndCov_2023_CU_C1V0.tif",
   },
   {
-    title: "Sentinel-2 Multi-Band (New York, 2026) — B04/B03/B02",
+    title: "Sentinel-2 Multi-Band (New York, 2024-08-14) — B04/B03/B02",
     urls: [
-      "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2026/1/S2B_18TWL_20260101_0_L2A/B04.tif",
-      "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2026/1/S2B_18TWL_20260101_0_L2A/B03.tif",
-      "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2026/1/S2B_18TWL_20260101_0_L2A/B02.tif",
+      "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2024/8/S2A_18TWL_20240814_0_L2A/B04.tif",
+      "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2024/8/S2A_18TWL_20240814_0_L2A/B03.tif",
+      "https://sentinel-cogs.s3.us-west-2.amazonaws.com/sentinel-s2-l2a-cogs/18/T/WL/2024/8/S2A_18TWL_20240814_0_L2A/B02.tif",
     ],
   },
 ];

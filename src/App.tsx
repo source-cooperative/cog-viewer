@@ -4,7 +4,6 @@ import { COGLayer, MultiCOGLayer } from "@developmentseed/deck.gl-geotiff";
 import {
   createColormapTexture,
   decodeColormapSprite,
-  LinearRescale,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import colormapsPngUrl from "@developmentseed/deck.gl-raster/gpu-modules/colormaps.png";
 import type { GeoTIFF } from "@developmentseed/geotiff";
@@ -33,6 +32,7 @@ import {
   readBandNames,
   type AutoStats,
 } from "./render/stats";
+import { PerBandLinearRescale } from "./render/shader-modules";
 import {
   makeMultiBandTileLoader,
   MAX_BAND_SLOTS,
@@ -378,22 +378,35 @@ export default function App() {
     if (multiSources) {
       const { sources, keys } = multiSources;
       const composite = { r: keys[0], g: keys[1], b: keys[2] };
-      // LinearRescale: MultiCOGLayer uses r16unorm for uint16 data and r8unorm
-      // for uint8. If the sampled max > 255, treat as uint16 (÷ 65535);
-      // otherwise uint8 (÷ 255). The module runs after CompositeBands and
-      // remaps the GPU-normalized [0, 1] value into the visible range.
-      const renderPipeline = autoStats?.global
-        ? (() => {
-            const g = autoStats.global;
-            const sampleScale = g.max > 255 ? 65535 : 255;
-            return [{
-              module: LinearRescale,
-              props: {
-                rescaleMin: percentileFromHistogram(g, 0.02) / sampleScale,
-                rescaleMax: percentileFromHistogram(g, 0.98) / sampleScale,
-              },
-            }];
-          })()
+      // PerBandLinearRescale: MultiCOGLayer uses r16unorm for uint16 data and
+      // r8unorm for uint8. Detect sampleScale from autoStats (max > 255 → uint16
+      // ÷ 65535; otherwise uint8 ÷ 255). Rescale values come from state.rescale
+      // when the user has set them, otherwise from autoStats 2–98% percentiles.
+      const sampleScale = autoStats?.global
+        ? (autoStats.global.max > 255 ? 65535 : 255)
+        : 65535;
+      const overrides = state.rescale;
+      let rescaleProps: {
+        rescaleMin: [number, number, number];
+        rescaleMax: [number, number, number];
+      } | null = null;
+      if (overrides && overrides.length > 0) {
+        const pick = (i: number) => overrides[i < overrides.length ? i : 0];
+        rescaleProps = {
+          rescaleMin: [pick(0)[0] / sampleScale, pick(1)[0] / sampleScale, pick(2)[0] / sampleScale],
+          rescaleMax: [pick(0)[1] / sampleScale, pick(1)[1] / sampleScale, pick(2)[1] / sampleScale],
+        };
+      } else if (autoStats?.global) {
+        const g = autoStats.global;
+        const lo = percentileFromHistogram(g, 0.02) / sampleScale;
+        const hi = percentileFromHistogram(g, 0.98) / sampleScale;
+        rescaleProps = {
+          rescaleMin: [lo, lo, lo],
+          rescaleMax: [hi, hi, hi],
+        };
+      }
+      const renderPipeline = rescaleProps
+        ? [{ module: PerBandLinearRescale, props: rescaleProps }]
         : [];
       const multiProps = {
         id: "multi-cog",
