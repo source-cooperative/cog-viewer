@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { EXAMPLES } from "../data/examples";
 
-type Props = { onSubmit: (url: string) => void };
+type Props = { onSubmit: (urls: string[]) => void };
 
 export function EmptyState({ onSubmit }: Props) {
   const [value, setValue] = useState("");
@@ -46,7 +46,7 @@ export function EmptyState({ onSubmit }: Props) {
               type="button"
               className="primary"
               disabled={!value}
-              onClick={() => onSubmit(value)}
+              onClick={() => onSubmit([value])}
             >
               Load
             </button>
@@ -58,13 +58,19 @@ export function EmptyState({ onSubmit }: Props) {
           <select
             aria-label="example"
             defaultValue=""
-            onChange={(e) => e.target.value && onSubmit(e.target.value)}
+            onChange={(e) => {
+              const idx = Number(e.target.value);
+              if (isNaN(idx)) return;
+              const ex = EXAMPLES[idx];
+              if (!ex) return;
+              onSubmit(ex.urls ?? [ex.url!]);
+            }}
           >
             <option value="" disabled>
               Choose…
             </option>
-            {EXAMPLES.map((ex) => (
-              <option key={ex.url} value={ex.url}>
+            {EXAMPLES.map((ex, idx) => (
+              <option key={idx} value={idx}>
                 {ex.title}
               </option>
             ))}
@@ -86,7 +92,7 @@ export function EmptyState({ onSubmit }: Props) {
           onDrop={(e) => {
             e.preventDefault();
             const f = e.dataTransfer.files[0];
-            if (f) onSubmit(URL.createObjectURL(f));
+            if (f) onSubmit([URL.createObjectURL(f)]);
           }}
         >
           <div style={{ marginBottom: 8 }}>Or drop a .tif file</div>
@@ -97,7 +103,7 @@ export function EmptyState({ onSubmit }: Props) {
             style={{ display: "block", margin: "0 auto" }}
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) onSubmit(URL.createObjectURL(f));
+              if (f) onSubmit([URL.createObjectURL(f)]);
             }}
           />
         </label>

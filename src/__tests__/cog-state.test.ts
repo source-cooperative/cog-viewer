@@ -1,0 +1,99 @@
+import { describe, expect, it } from "vitest";
+import { parseCogState, serializeCogState, urlsKey } from "../state/useCogState";
+
+const base = {
+  mode: null,
+  bands: null,
+  rescale: null,
+  colormap: null,
+  nodata: null,
+  opacity: 1,
+  basemap: "auto" as const,
+  panel: "closed" as const,
+  gamma: 1,
+  labelsAbove: true,
+  stretch: "linear" as const,
+  zoom: null,
+  latitude: null,
+  longitude: null,
+};
+
+describe("urlsKey", () => {
+  it("produces identical strings when url list is the same but viewport params differ", () => {
+    // This is the regression test for the array-reference dep bug:
+    // parsing ?url=a.tif and ?url=a.tif&lat=40&zoom=8 should give the
+    // same urlsKey so effects gated on urlsKey don't re-run on viewport changes.
+    const withUrl = new URLSearchParams("url=https://example.com/a.tif");
+    const withUrlAndViewport = new URLSearchParams(
+      "url=https://example.com/a.tif&lat=40.1&lon=-74.2&zoom=8.5",
+    );
+    expect(urlsKey(parseCogState(withUrl))).toBe(
+      urlsKey(parseCogState(withUrlAndViewport)),
+    );
+  });
+
+  it("produces different strings when the url list changes", () => {
+    const one = new URLSearchParams("url=https://example.com/a.tif");
+    const two = new URLSearchParams("url=https://example.com/b.tif");
+    expect(urlsKey(parseCogState(one))).not.toBe(urlsKey(parseCogState(two)));
+  });
+});
+
+describe("parseCogState — urls", () => {
+  it("returns empty urls when no url param is present", () => {
+    const state = parseCogState(new URLSearchParams(""));
+    expect(state.urls).toEqual([]);
+  });
+
+  it("returns single-element array for one url param", () => {
+    const state = parseCogState(new URLSearchParams("url=https://example.com/a.tif"));
+    expect(state.urls).toEqual(["https://example.com/a.tif"]);
+  });
+
+  it("collects all values when url param is repeated", () => {
+    const p = new URLSearchParams();
+    p.append("url", "https://example.com/B04.tif");
+    p.append("url", "https://example.com/B03.tif");
+    p.append("url", "https://example.com/B02.tif");
+    expect(parseCogState(p).urls).toEqual([
+      "https://example.com/B04.tif",
+      "https://example.com/B03.tif",
+      "https://example.com/B02.tif",
+    ]);
+  });
+});
+
+describe("serializeCogState — urls", () => {
+  it("omits url params when urls is empty", () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const p = serializeCogState({ ...base, urls: [] } as any);
+    expect(p.getAll("url")).toEqual([]);
+  });
+
+  it("produces one url param for a single url", () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const p = serializeCogState({ ...base, urls: ["https://example.com/a.tif"] } as any);
+    expect(p.getAll("url")).toEqual(["https://example.com/a.tif"]);
+  });
+
+  it("produces multiple url params for multiple urls", () => {
+    const p = serializeCogState({
+      ...base,
+      urls: ["https://example.com/B04.tif", "https://example.com/B03.tif"],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+    expect(p.getAll("url")).toEqual([
+      "https://example.com/B04.tif",
+      "https://example.com/B03.tif",
+    ]);
+  });
+
+  it("roundtrips multi-url state through parse and serialize", () => {
+    const original = new URLSearchParams();
+    original.append("url", "https://example.com/B04.tif");
+    original.append("url", "https://example.com/B02.tif");
+    const state = parseCogState(original);
+    const roundtripped = parseCogState(serializeCogState(state));
+    expect(roundtripped.urls).toEqual(state.urls);
+  });
+});

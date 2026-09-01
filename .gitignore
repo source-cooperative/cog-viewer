@@ -30,6 +30,9 @@ dist-ssr
 docs/plans
 .worktrees
 
+# TypeScript incremental build cache
+*.tsbuildinfo
+
 # Playwright
 playwright-report/
 test-results/

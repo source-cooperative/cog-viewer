@@ -65,11 +65,19 @@ const parseViewport = (raw: string | null): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
+/** Stable string key derived from a state's URL list. Identical whenever
+ * the COG URLs haven't changed, even if other URL params (viewport, mode)
+ * did. Use this as an effect dep instead of state.urls (array ref) to
+ * prevent spurious GeoTIFF reloads when unrelated params change. */
+export function urlsKey(state: Pick<CogState, "urls">): string {
+  return state.urls.join("\n");
+}
+
 export function parseCogState(p: URLSearchParams): CogState {
   const modeRaw = p.get("mode");
   const basemapRaw = p.get("basemap");
   return {
-    url: p.get("url"),
+    urls: p.getAll("url"),
     mode: VALID_MODES.includes(modeRaw as Mode) ? (modeRaw as Mode) : null,
     bands: parseBands(p.get("bands")),
     rescale: parseRescale(p.get("rescale")),
@@ -95,7 +103,7 @@ export function parseCogState(p: URLSearchParams): CogState {
 
 export function serializeCogState(s: CogState): URLSearchParams {
   const p = new URLSearchParams();
-  if (s.url) p.set("url", s.url);
+  for (const u of s.urls) p.append("url", u);
   if (s.mode) p.set("mode", s.mode);
   if (s.bands) p.set("bands", s.bands.join(","));
   if (s.rescale) p.set("rescale", s.rescale.map((r) => r.join(",")).join(";"));

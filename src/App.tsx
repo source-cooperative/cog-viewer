@@ -1,6 +1,6 @@
 import type { MapboxOverlayProps } from "@deck.gl/mapbox";
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import { COGLayer } from "@developmentseed/deck.gl-geotiff";
+import { COGLayer, MultiCOGLayer } from "@developmentseed/deck.gl-geotiff";
 import {
   createColormapTexture,
   decodeColormapSprite,
@@ -25,18 +25,21 @@ import { selectOverlayLayers } from "./geo/overlay-layers";
 import {
   buildRgbCompositeRenderTile,
   buildSingleCompositeRenderTile,
+  pushAdjustments,
 } from "./render/render-pipeline";
 import {
   computeAutoStats,
+  percentileFromHistogram,
   readBandNames,
   type AutoStats,
 } from "./render/stats";
+import { PerBandLinearRescale } from "./render/shader-modules";
 import {
   makeMultiBandTileLoader,
   MAX_BAND_SLOTS,
   setTileErrorHandler,
 } from "./render/tile-loader";
-import { useCogState } from "./state/useCogState";
+import { urlsKey, useCogState } from "./state/useCogState";
 
 // Get the default epsgResolver from COGLayer's defaultProps so the wrapper has
 // a stable identity (module scope = no re-creation on every render).
@@ -97,7 +100,7 @@ const FETCHED_BANDS = Array.from({ length: MAX_BAND_SLOTS }, (_, i) => i + 1);
 const getTileData = makeMultiBandTileLoader(FETCHED_BANDS);
 
 /** Image-specific URL params that don't make sense across COGs. Cleared
- * whenever state.url changes (e.g., user pastes a new COG). */
+ * whenever the loaded COG(s) change. */
 const IMAGE_SPECIFIC_RESET = {
   mode: null,
   bands: null,
@@ -108,6 +111,17 @@ const IMAGE_SPECIFIC_RESET = {
   latitude: null,
   longitude: null,
 } as const;
+
+/** Extracts a short key from a URL: the filename stem (no extension). */
+function urlKey(url: string): string {
+  try {
+    const path = new URL(url).pathname;
+    const name = path.split("/").pop() ?? url;
+    return name.replace(/\.[^.]+$/, "");
+  } catch {
+    return url;
+  }
+}
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
@@ -150,13 +164,30 @@ export default function App() {
   // late-arriving bandCount from clobbering an explicit user mode pick made
   // between the URL change and metadata load.
   const autoModeFiredFor = useRef<string | null>(null);
+  // Stable string key for the current URL list. Used as effect/memo dep
+  // instead of state.urls (array reference) so that viewport/mode/band
+  // changes — which produce a new state object but the same URLs — do not
+  // trigger spurious GeoTIFF reloads. See useCogState.ts for details.
+  const cogUrlsKey = urlsKey(state);
+  // Stable sources/keys for multi-COG — memoized independently of autoStats
+  // so that MultiCOGLayer.updateState sees props.sources === oldProps.sources
+  // on every autoStats update, preventing an expensive re-open of all COG
+  // headers just to change the renderPipeline rescale step.
+  const multiSources = useMemo(() => {
+    if (state.urls.length <= 1) return null;
+    const keys = state.urls.map(urlKey);
+    const sources: Record<string, { url: string }> = {};
+    state.urls.forEach((url, i) => { sources[keys[i]] = { url }; });
+    return { sources, keys };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cogUrlsKey]);
 
   // Drop blob: URLs from prior drag-drop sessions on initial mount — they
   // can't survive a reload, so the map would otherwise show a stuck broken
-  // state with no recovery (EmptyState only renders when !state.url).
+  // state with no recovery (EmptyState only renders when urls is empty).
   useEffect(() => {
-    if (state.url?.startsWith("blob:")) {
-      update({ url: null });
+    if (state.urls[0]?.startsWith("blob:")) {
+      update({ urls: [] });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -175,9 +206,31 @@ export default function App() {
     setError(null);
     setWarning(null);
     setExtentValid(true);
-    const url = state.url;
-    if (!url) return;
+    if (state.urls.length === 0) return;
     let cancelled = false;
+    if (state.urls.length > 1) {
+      // Multi-COG: MultiCOGLayer handles tile fetching for all sources.
+      // Load the primary source here only to compute auto-stats so the
+      // renderPipeline can include a LinearRescale step.
+      const ctrl = new AbortController();
+      (async () => {
+        try {
+          const tiff = await loadGeoTIFF(normalizeUrl(state.urls[0]));
+          if (cancelled) return;
+          const stats = await computeAutoStats(tiff, ctrl.signal, (partial) => {
+            if (!ctrl.signal.aborted) setAutoStats(partial);
+          });
+          if (!ctrl.signal.aborted) setAutoStats(stats);
+        } catch (err) {
+          if (!cancelled) console.warn("multi-COG auto-stats failed", err);
+        }
+      })();
+      return () => {
+        cancelled = true;
+        ctrl.abort();
+      };
+    }
+    const url = state.urls[0];
     (async () => {
       try {
         const tiff = await loadGeoTIFF(normalizeUrl(url));
@@ -203,7 +256,10 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [state.url]);
+    // cogUrlsKey is a stable string derived from state.urls — prevents
+    // re-running when viewport/mode params change but COG URLs stay the same.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cogUrlsKey]);
 
   // Surface tile fetch/decode failures (which deck.gl otherwise swallows) as a
   // user-facing error. Registered once; the handler reads setError, which is
@@ -245,15 +301,16 @@ export default function App() {
     return () => ctrl.abort();
   }, [geotiff]);
 
-  // After bandCount resolves for a URL, fire a one-shot auto-pick of mode +
-  // bands when the user hasn't set them. The ref-guard prevents a late
-  // bandCount from overriding a deliberate user choice made between the URL
-  // change and metadata load. Resets per URL.
+  // After bandCount resolves for a single-file COG, fire a one-shot auto-pick
+  // of mode + bands when the user hasn't set them. Not used for multi-COG
+  // (mode is always rgb). The ref-guard prevents a late bandCount from
+  // overriding a deliberate user choice made between the URL change and load.
   useEffect(() => {
-    if (!state.url) return;
+    if (state.urls.length !== 1) return;
+    const primaryUrl = state.urls[0];
     if (bandCount === null) return;
-    if (autoModeFiredFor.current === state.url) return;
-    autoModeFiredFor.current = state.url;
+    if (autoModeFiredFor.current === primaryUrl) return;
+    autoModeFiredFor.current = primaryUrl;
     if (state.mode !== null) return;
     if (bandCount >= 3) {
       update({ mode: "rgb", bands: [1, 2, 3] });
@@ -261,7 +318,7 @@ export default function App() {
       // 1 or 2 bands → single + colormap. RGB on 2 bands leaves blue empty.
       update({ mode: "single", bands: [1] });
     }
-  }, [bandCount, state.url, state.mode, update]);
+  }, [bandCount, cogUrlsKey, state.mode, update]);
 
   useEffect(() => {
     if (!device) return;
@@ -279,9 +336,108 @@ export default function App() {
   }, [device]);
 
   const layer = useMemo(() => {
-    // Wait until we've constructed the GeoTIFF with our own chunk size. The
-    // URL-only fast path is intentionally gone — see the workaround comment
-    // above on why we hand a pre-built GeoTIFF instance to COGLayer.
+    const labelsAvailable =
+      state.basemap !== "satellite" && state.basemap !== "off";
+    const beforeId =
+      state.labelsAbove && labelsAvailable ? firstSymbolId : undefined;
+
+    const handleBoundsLoad = (geographicBounds: {
+      west: number; south: number; east: number; north: number;
+    }) => {
+      if (!isValidGeographicBounds(geographicBounds)) {
+        // A COG's declared CRS may be missing, unrecognized, or otherwise
+        // fail to reproject cleanly to WGS84 — that yields NaN/Infinity or
+        // raw projected-CRS values instead of real lng/lat. Feeding those
+        // into fitBounds throws an uncaught "Invalid LngLat" deep inside
+        // maplibre-gl, so bail out with a clear message instead. Also drop
+        // the tile layer (via extentValid) so we don't paint mislocated
+        // tiles under that error — the library's tile-placement path clamps
+        // coordinates and would otherwise keep drawing.
+        setError(
+          "Could not determine this COG's geographic extent — its " +
+            "coordinate reference system may be missing or unsupported.",
+        );
+        setExtentValid(false);
+        return;
+      }
+      // CRS resolved and bounds are valid — now safe to add the tile layer
+      // to the MapLibre stack (beforeId won't be stale at this point).
+      setExtentValid(true);
+      // Skip fitBounds when the URL already encodes a viewport (shared link).
+      if (urlZoomAtCogLoad.current !== null) return;
+      const { west, south, east, north } = geographicBounds;
+      mapRef.current?.fitBounds(
+        [[west, south], [east, north]],
+        { padding: 40, duration: 0 },
+      );
+    };
+
+    // Multi-COG path: each URL is one source (one band from a separate file).
+    // Uses the stable multiSources object (memoized on cogUrlsKey only) so
+    // that autoStats updates change only the renderPipeline without
+    // triggering a MultiCOGLayer source re-open.
+    if (multiSources) {
+      const { sources, keys } = multiSources;
+      const bands = state.bands ?? [1, 2, 3];
+      const composite = {
+        r: keys[(bands[0] ?? 1) - 1] ?? keys[0],
+        g: keys[(bands[1] ?? 2) - 1] ?? keys[1],
+        b: keys[(bands[2] ?? 3) - 1] ?? keys[2],
+      };
+      // PerBandLinearRescale: MultiCOGLayer uses r16unorm for uint16 data and
+      // r8unorm for uint8. Detect sampleScale from autoStats (max > 255 → uint16
+      // ÷ 65535; otherwise uint8 ÷ 255). Rescale values come from state.rescale
+      // when the user has set them, otherwise from autoStats 2–98% percentiles.
+      const sampleScale = autoStats?.global
+        ? (autoStats.global.max > 255 ? 65535 : 255)
+        : 65535;
+      const overrides = state.rescale;
+      let rescaleProps: {
+        rescaleMin: [number, number, number];
+        rescaleMax: [number, number, number];
+      } | null = null;
+      if (overrides && overrides.length > 0) {
+        const pick = (i: number) => overrides[i < overrides.length ? i : 0];
+        rescaleProps = {
+          rescaleMin: [pick(0)[0] / sampleScale, pick(1)[0] / sampleScale, pick(2)[0] / sampleScale],
+          rescaleMax: [pick(0)[1] / sampleScale, pick(1)[1] / sampleScale, pick(2)[1] / sampleScale],
+        };
+      } else if (autoStats?.global) {
+        const g = autoStats.global;
+        const lo = percentileFromHistogram(g, 0.02) / sampleScale;
+        const hi = percentileFromHistogram(g, 0.98) / sampleScale;
+        rescaleProps = {
+          rescaleMin: [lo, lo, lo],
+          rescaleMax: [hi, hi, hi],
+        };
+      }
+      const renderPipeline = rescaleProps
+        ? [{ module: PerBandLinearRescale, props: rescaleProps }]
+        : [];
+      pushAdjustments(state, renderPipeline);
+      const multiProps = {
+        id: "multi-cog",
+        sources,
+        composite,
+        epsgResolver: robustEpsgResolver,
+        opacity: state.opacity,
+        beforeId,
+        renderPipeline,
+        onGeoTIFFLoad: (
+          sourcesMap: Map<string, GeoTIFF>,
+          options: { geographicBounds: { west: number; south: number; east: number; north: number } },
+        ) => {
+          setBandCount(sourcesMap.size);
+          handleBoundsLoad(options.geographicBounds);
+        },
+      };
+      return new MultiCOGLayer(multiProps);
+    }
+
+    // Single-COG path: wait until we've constructed the GeoTIFF with our own
+    // chunk size. The URL-only fast path is intentionally gone — see the
+    // workaround comment on load-geotiff.ts for why we hand a pre-built
+    // GeoTIFF instance to COGLayer.
     if (!geotiff) return null;
 
     // Always mount the custom path (stable id "cog") so the tile cache
@@ -293,25 +449,15 @@ export default function App() {
         ? buildSingleCompositeRenderTile(state, colormapTexture, autoStats)
         : buildRgbCompositeRenderTile(state, autoStats);
 
-    // beforeId places the COG below the first symbol (label) layer so labels
-    // remain readable. Read by @deck.gl/mapbox's MapboxOverlay in interleaved
-    // mode but missing from COGLayer's narrower props type — extract to a
-    // const so structural assignability applies instead of the excess-property
-    // check. Suppress for basemaps known to have no labels so we don't carry
-    // a stale id from the previous style into setStyle (see firstSymbolId
-    // reset effect above).
-    const labelsAvailable =
-      state.basemap !== "satellite" && state.basemap !== "off";
     const cogProps = {
       id: "cog",
       geotiff,
       epsgResolver: robustEpsgResolver,
-      ...(state.url && isSourceCoopUrl(state.url) ? { maxRequests: 20 } : {}),
+      ...(state.urls[0] && isSourceCoopUrl(state.urls[0]) ? { maxRequests: 20 } : {}),
       opacity: state.opacity,
       getTileData,
       renderTile,
-      beforeId:
-        state.labelsAbove && labelsAvailable ? firstSymbolId : undefined,
+      beforeId,
       onError: (err: unknown) => {
         setError((prev) => prev ?? humanizeError(err));
       },
@@ -323,40 +469,15 @@ export default function App() {
       ) => {
         setBandCount(tiff.count);
         setBandNames(readBandNames(tiff));
-        if (!isValidGeographicBounds(options.geographicBounds)) {
-          // A COG's declared CRS may be missing, unrecognized, or otherwise
-          // fail to reproject cleanly to WGS84 — that yields NaN/Infinity or
-          // raw projected-CRS values instead of real lng/lat. Feeding those
-          // into fitBounds throws an uncaught "Invalid LngLat" deep inside
-          // maplibre-gl, so bail out with a clear message instead. Also drop
-          // the tile layer (via extentValid) so we don't paint mislocated
-          // tiles under that error — the library's tile-placement path clamps
-          // coordinates and would otherwise keep drawing.
-          setError(
-            "Could not determine this COG's geographic extent — its " +
-              "coordinate reference system may be missing or unsupported.",
-          );
-          setExtentValid(false);
-          return;
-        }
-        setExtentValid(true);
-        // Skip fitBounds when the URL already encodes a viewport (shared link).
-        if (urlZoomAtCogLoad.current !== null) return;
-        const { west, south, east, north } = options.geographicBounds;
-        mapRef.current?.fitBounds(
-          [
-            [west, south],
-            [east, north],
-          ],
-          { padding: 40, duration: 0 },
-        );
+        handleBoundsLoad(options.geographicBounds);
       },
     };
     return new COGLayer(cogProps);
   }, [
     geotiff,
     autoStats,
-    state.url,
+    multiSources,
+    cogUrlsKey,
     state.opacity,
     state.mode,
     state.bands,
@@ -364,6 +485,7 @@ export default function App() {
     state.nodata,
     state.colormap,
     state.gamma,
+    state.stretch,
     state.labelsAbove,
     state.basemap,
     firstSymbolId,
@@ -427,9 +549,9 @@ export default function App() {
 
       <FullscreenButton />
 
-      {!state.url && (
+      {state.urls.length === 0 && (
         <EmptyState
-          onSubmit={(url) => update({ url, ...IMAGE_SPECIFIC_RESET })}
+          onSubmit={(urls) => update({ urls, ...IMAGE_SPECIFIC_RESET })}
         />
       )}
     </div>
