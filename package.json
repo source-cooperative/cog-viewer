@@ -44,15 +44,5 @@
     "typescript": "^5.7.0",
     "vite": "^8.0.0",
     "vitest": "^4.1.5"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "@sentry/cli"
-    ],
-    "patchedDependencies": {
-      "@developmentseed/deck.gl-raster@0.8.0-beta.2": "patches/@developmentseed__deck.gl-raster@0.8.0-beta.2.patch",
-      "@developmentseed/raster-reproject@0.8.0-beta.2": "patches/@developmentseed__raster-reproject@0.8.0-beta.2.patch",
-      "@developmentseed/deck.gl-geotiff@0.8.0-beta.2": "patches/@developmentseed__deck.gl-geotiff@0.8.0-beta.2.patch"
-    }
   }
 }

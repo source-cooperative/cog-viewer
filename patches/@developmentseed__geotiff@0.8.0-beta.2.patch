@@ -1,0 +1,32 @@
+diff --git a/dist/crs.js b/dist/crs.js
+index eb7d94897d14f60091cf70c4fb1cd19bbece4be9..1c6fe3561f6d5d8af8a381aaeef707b0d46f8cc9 100644
+--- a/dist/crs.js
++++ b/dist/crs.js
+@@ -27,6 +27,7 @@ const CT_POLYCONIC = 22;
+ const CT_SINUSOIDAL = 24;
+ const CT_NEW_ZEALAND_MAP_GRID = 26;
+ const CT_TRANSVERSE_MERCATOR_SOUTH_ORIENTED = 27;
++const CT_CYLINDRICAL_EQUAL_AREA = 28;
+ const ANGULAR_UNIT_DEGREE = 9102;
+ const ANGULAR_UNIT_RADIAN = 9101;
+ const ANGULAR_UNIT_GRAD = 9105;
+@@ -449,6 +450,19 @@ function _buildConversion(gkd) {
+                 ],
+             };
+         }
++        case CT_CYLINDRICAL_EQUAL_AREA: {
++            const name = "Lambert Cylindrical Equal Area";
++            return {
++                name,
++                method: { name },
++                parameters: [
++                    angular("Latitude of 1st standard parallel", gkd.projStdParallel1 ?? gkd.projNatOriginLat),
++                    angular("Longitude of natural origin", gkd.projNatOriginLong ?? gkd.projCenterLong),
++                    linear("False easting", gkd.projFalseEasting),
++                    linear("False northing", gkd.projFalseNorthing),
++                ],
++            };
++        }
+         default:
+             throw new Error(`Unsupported coordinate transformation type: ${ct}`);
+     }

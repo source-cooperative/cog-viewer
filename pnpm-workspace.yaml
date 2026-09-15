@@ -1,0 +1,9 @@
+onlyBuiltDependencies:
+  - "@sentry/cli"
+
+patchedDependencies:
+  "@developmentseed/deck.gl-geotiff@0.8.0-beta.2": "patches/@developmentseed__deck.gl-geotiff@0.8.0-beta.2.patch"
+  "@developmentseed/deck.gl-raster@0.8.0-beta.2": "patches/@developmentseed__deck.gl-raster@0.8.0-beta.2.patch"
+  '@developmentseed/geotiff@0.8.0-beta.2': patches/@developmentseed__geotiff@0.8.0-beta.2.patch
+  '@developmentseed/proj@0.8.0-beta.2': patches/@developmentseed__proj@0.8.0-beta.2.patch
+  "@developmentseed/raster-reproject@0.8.0-beta.2": "patches/@developmentseed__raster-reproject@0.8.0-beta.2.patch"

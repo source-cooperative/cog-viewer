@@ -1,0 +1,29 @@
+diff --git a/dist/parse-wkt.js b/dist/parse-wkt.js
+index 3e08bdaaf98a2371e44177b0132688c6f160c1c2..fe6cde080647689a6b2374308501b04089c2e17b 100644
+--- a/dist/parse-wkt.js
++++ b/dist/parse-wkt.js
+@@ -5,8 +5,24 @@ import wktParser from "wkt-parser";
+  *
+  * This is a typed wrapper around the `wkt-parser` package.
+  */
++// PROJJSON method names that wkt-parser passes through verbatim but proj4 only
++// registers under a short alias.  Map them so proj4 can find the projection.
++const PROJNAME_ALIASES = {
++    "Lambert Cylindrical Equal Area": "cea",
++    "Cylindrical Equal Area (Spherical)": "cea",
++};
+ export function parseWkt(input) {
+     const def = wktParser(input);
++    // Normalize method names that wkt-parser emits verbatim from PROJJSON but
++    // proj4 only knows by short name.
++    if (def.projName && PROJNAME_ALIASES[def.projName]) {
++        def.projName = PROJNAME_ALIASES[def.projName];
++    }
++    // Lambert CEA uses lat_ts (standard parallel) but wkt-parser maps
++    // "Latitude of 1st standard parallel" → lat1, not lat_ts.
++    if (def.projName === "cea" && def.lat1 !== undefined && def.lat_ts === undefined) {
++        def.lat_ts = def.lat1;
++    }
+     // wkt-parser doesn't always resolve per-axis units from GeographicCRS
+     // PROJJSON, leaving units: "unknown". longlat is always degrees by definition.
+     if (def.projName === "longlat" && (!def.units || def.units === "unknown")) {

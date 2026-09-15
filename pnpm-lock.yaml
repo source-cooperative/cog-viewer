@@ -6,11 +6,17 @@ settings:
 
 patchedDependencies:
   '@developmentseed/deck.gl-geotiff@0.8.0-beta.2':
-    hash: 4494618588bfff1d5a9b53fd6ec194dba1cb4331ef781cc6fe833ae4d936f620
+    hash: 7f9c35ee15d62ee7e3443fa3b5e66c2d193960986a8f3a745d6864fbbbf8149c
     path: patches/@developmentseed__deck.gl-geotiff@0.8.0-beta.2.patch
   '@developmentseed/deck.gl-raster@0.8.0-beta.2':
     hash: ef57ca0be37d5d1ca42d52bdc456a0d69943fb2e27c4ce1442b472c7b72d8326
     path: patches/@developmentseed__deck.gl-raster@0.8.0-beta.2.patch
+  '@developmentseed/geotiff@0.8.0-beta.2':
+    hash: ecb75a090fc075553ec655e366c7b8077ce39990193af9f2ca8d691a1368835f
+    path: patches/@developmentseed__geotiff@0.8.0-beta.2.patch
+  '@developmentseed/proj@0.8.0-beta.2':
+    hash: 46068a406d1eed3bb5ce8bd68a522661b8b493bc5cf82126c74783b672a780ff
+    path: patches/@developmentseed__proj@0.8.0-beta.2.patch
   '@developmentseed/raster-reproject@0.8.0-beta.2':
     hash: 68a9b441a0de024d3d9b2f4b471bab3b84a4ec2bdaf0301bc5420f3c6da84f2e
     path: patches/@developmentseed__raster-reproject@0.8.0-beta.2.patch
@@ -39,13 +45,13 @@ importers:
         version: 9.3.2(@deck.gl/core@9.3.2)(@luma.gl/core@9.3.3)(@math.gl/web-mercator@4.1.0)
       '@developmentseed/deck.gl-geotiff':
         specifier: 0.8.0-beta.2
-        version: 0.8.0-beta.2(patch_hash=4494618588bfff1d5a9b53fd6ec194dba1cb4331ef781cc6fe833ae4d936f620)(71285630fbe21754b1ea3701085edd16)
+        version: 0.8.0-beta.2(patch_hash=7f9c35ee15d62ee7e3443fa3b5e66c2d193960986a8f3a745d6864fbbbf8149c)(71285630fbe21754b1ea3701085edd16)
       '@developmentseed/deck.gl-raster':
         specifier: 0.8.0-beta.2
         version: 0.8.0-beta.2(patch_hash=ef57ca0be37d5d1ca42d52bdc456a0d69943fb2e27c4ce1442b472c7b72d8326)(fd4a5c6fd4c0032b3658765a2c789c53)
       '@developmentseed/geotiff':
         specifier: 0.8.0-beta.2
-        version: 0.8.0-beta.2
+        version: 0.8.0-beta.2(patch_hash=ecb75a090fc075553ec655e366c7b8077ce39990193af9f2ca8d691a1368835f)
       '@luma.gl/core':
         specifier: ^9.3.3
         version: 9.3.3
@@ -2265,7 +2271,7 @@ snapshots:
 
   '@developmentseed/affine@0.8.0-beta.2': {}
 
-  '@developmentseed/deck.gl-geotiff@0.8.0-beta.2(patch_hash=4494618588bfff1d5a9b53fd6ec194dba1cb4331ef781cc6fe833ae4d936f620)(71285630fbe21754b1ea3701085edd16)':
+  '@developmentseed/deck.gl-geotiff@0.8.0-beta.2(patch_hash=7f9c35ee15d62ee7e3443fa3b5e66c2d193960986a8f3a745d6864fbbbf8149c)(71285630fbe21754b1ea3701085edd16)':
     dependencies:
       '@cogeotiff/core': 9.5.0
       '@deck.gl/core': 9.3.2
@@ -2274,9 +2280,9 @@ snapshots:
       '@deck.gl/mesh-layers': 9.3.2(@deck.gl/core@9.3.2)(@loaders.gl/core@4.4.2)(@luma.gl/core@9.3.3)(@luma.gl/engine@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3)))(@luma.gl/gltf@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/engine@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3)))(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3)))(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3))
       '@developmentseed/affine': 0.8.0-beta.2
       '@developmentseed/deck.gl-raster': 0.8.0-beta.2(patch_hash=ef57ca0be37d5d1ca42d52bdc456a0d69943fb2e27c4ce1442b472c7b72d8326)(fd4a5c6fd4c0032b3658765a2c789c53)
-      '@developmentseed/geotiff': 0.8.0-beta.2
+      '@developmentseed/geotiff': 0.8.0-beta.2(patch_hash=ecb75a090fc075553ec655e366c7b8077ce39990193af9f2ca8d691a1368835f)
       '@developmentseed/morecantile': 0.8.0-beta.2
-      '@developmentseed/proj': 0.8.0-beta.2
+      '@developmentseed/proj': 0.8.0-beta.2(patch_hash=46068a406d1eed3bb5ce8bd68a522661b8b493bc5cf82126c74783b672a780ff)
       '@developmentseed/raster-reproject': 0.8.0-beta.2(patch_hash=68a9b441a0de024d3d9b2f4b471bab3b84a4ec2bdaf0301bc5420f3c6da84f2e)
       '@luma.gl/core': 9.3.3
       flatbush: 4.5.1
@@ -2292,7 +2298,7 @@ snapshots:
       '@deck.gl/mesh-layers': 9.3.2(@deck.gl/core@9.3.2)(@loaders.gl/core@4.4.2)(@luma.gl/core@9.3.3)(@luma.gl/engine@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3)))(@luma.gl/gltf@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/engine@9.3.3(@luma.gl/core@9.3.3)(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3)))(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3)))(@luma.gl/shadertools@9.3.3(@luma.gl/core@9.3.3))
       '@developmentseed/affine': 0.8.0-beta.2
       '@developmentseed/morecantile': 0.8.0-beta.2
-      '@developmentseed/proj': 0.8.0-beta.2
+      '@developmentseed/proj': 0.8.0-beta.2(patch_hash=46068a406d1eed3bb5ce8bd68a522661b8b493bc5cf82126c74783b672a780ff)
       '@developmentseed/raster-reproject': 0.8.0-beta.2(patch_hash=68a9b441a0de024d3d9b2f4b471bab3b84a4ec2bdaf0301bc5420f3c6da84f2e)
       '@luma.gl/core': 9.3.3
       '@luma.gl/shadertools': 9.3.3(@luma.gl/core@9.3.3)
@@ -2300,7 +2306,7 @@ snapshots:
       '@math.gl/culling': 4.1.0
       '@math.gl/web-mercator': 4.1.0
 
-  '@developmentseed/geotiff@0.8.0-beta.2':
+  '@developmentseed/geotiff@0.8.0-beta.2(patch_hash=ecb75a090fc075553ec655e366c7b8077ce39990193af9f2ca8d691a1368835f)':
     dependencies:
       '@chunkd/middleware': 11.3.1
       '@chunkd/source': 11.4.1
@@ -2310,7 +2316,7 @@ snapshots:
       '@developmentseed/affine': 0.8.0-beta.2
       '@developmentseed/lzw-tiff-decoder': 0.2.2
       '@developmentseed/morecantile': 0.8.0-beta.2
-      '@developmentseed/proj': 0.8.0-beta.2
+      '@developmentseed/proj': 0.8.0-beta.2(patch_hash=46068a406d1eed3bb5ce8bd68a522661b8b493bc5cf82126c74783b672a780ff)
       fzstd: 0.1.1
       lerc: 4.1.1
       uuid: 14.0.0
@@ -2321,7 +2327,7 @@ snapshots:
     dependencies:
       '@developmentseed/affine': 0.8.0-beta.2
 
-  '@developmentseed/proj@0.8.0-beta.2':
+  '@developmentseed/proj@0.8.0-beta.2(patch_hash=46068a406d1eed3bb5ce8bd68a522661b8b493bc5cf82126c74783b672a780ff)':
     dependencies:
       wkt-parser: 1.5.5
 
