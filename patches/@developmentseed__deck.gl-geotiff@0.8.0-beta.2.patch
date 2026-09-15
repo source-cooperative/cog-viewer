@@ -17,7 +17,7 @@ index 167756a51946449f1be2f864f61a5edd36e5bf9e..9b16cc3ce84dce32539fd5d9e1fc12de
       *
       * This can be useful in combination with the MosaicLayer, so that when a
 diff --git a/dist/cog-layer.js b/dist/cog-layer.js
-index 3cd2714260086e7c8978d459af6716b8469103b5..01f7fc6871f15afbe346fc929b4b2be25d13ba2b 100644
+index 3cd2714260086e7c8978d459af6716b8469103b5..c1d79c6281e1fd4ff3dc46b8f220020086071eab 100644
 --- a/dist/cog-layer.js
 +++ b/dist/cog-layer.js
 @@ -20,6 +20,7 @@ export class COGLayer extends RasterTileLayer {
@@ -41,6 +41,35 @@ index 3cd2714260086e7c8978d459af6716b8469103b5..01f7fc6871f15afbe346fc929b4b2be2
          }
      }
      clearState() {
+@@ -64,9 +69,25 @@ export class COGLayer extends RasterTileLayer {
+             throw err;
+         }
+         const crs = geotiff.crs;
+-        const sourceProjection = typeof crs === "number"
+-            ? await this.props.epsgResolver(crs)
+-            : parseWkt(crs);
++        let sourceProjection;
++        if (typeof crs === "number") {
++            sourceProjection = await this.props.epsgResolver(crs);
++        } else {
++            try {
++                sourceProjection = parseWkt(crs);
++            } catch (wktErr) {
++                // wkt-parser doesn't support every projection method.  Many COGs
++                // embed an EPSG AUTHORITY tag in their WKT — extract it and resolve
++                // via epsg.io as a fallback so the file still renders.
++                const matches = [...crs.matchAll(/AUTHORITY\["EPSG","(\d+)"\]/gi)];
++                const epsgCode = matches.length > 0 ? Number(matches[matches.length - 1][1]) : NaN;
++                if (!isNaN(epsgCode)) {
++                    sourceProjection = await this.props.epsgResolver(epsgCode);
++                } else {
++                    throw wktErr;
++                }
++            }
++        }
+         if (signal?.aborted) {
+             return;
+         }
 diff --git a/dist/geotiff/geotiff.js b/dist/geotiff/geotiff.js
 index b07748d892c3f174650047cbae6285ab5fa94efa..471b81549f455a4c5f33c0685d5ba5c9f2261934 100644
 --- a/dist/geotiff/geotiff.js
