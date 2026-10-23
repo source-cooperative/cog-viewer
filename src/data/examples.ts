@@ -4,11 +4,6 @@ export type CogExample =
 
 export const EXAMPLES: CogExample[] = [
   {
-    title:
-      "Potential Above-Ground Combustion in Boreal and Arctic North America for SSP585",
-    url: "https://data.source.coop/luddaludwig/potential-agc-combustion-ssp585-v0/AGC_final.tif",
-  },
-  {
     title: "Flood Extent Detection (North Carolina, 2018)",
     url: "https://data.source.coop/nasa/floods/florence_20180919t231350/florence_img_s1a_iw_rt30_20180919t231350_g_gpn_vh.tif",
   },
