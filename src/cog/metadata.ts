@@ -307,7 +307,7 @@ type MetadataInput = Pick<
   | "nodata"
   | "crs"
   | "bbox"
-  | "cachedTags"
+  | "cachedPrimaryImageTags"
   | "gkd"
   | "offsets"
   | "scales"
@@ -317,7 +317,7 @@ type MetadataInput = Pick<
 
 /** Pure derivation from an already-loaded GeoTIFF: no fetches, no I/O. */
 export function summarizeGeoTIFF(tiff: MetadataInput): MetadataSummary {
-  const cached = tiff.cachedTags;
+  const cached = tiff.cachedPrimaryImageTags;
   const sampleFormat = cached.sampleFormat?.[0] ?? null;
   const bits = cached.bitsPerSample?.[0] ?? null;
 

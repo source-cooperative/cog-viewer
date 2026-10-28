@@ -1,0 +1,93 @@
+diff --git a/dist/raster-layer.js b/dist/raster-layer.js
+index 55e4fa8da199a46eb57547654e1edde0cbcf064f..c75b7bbceebd31ab66c69b58ee40f31c9f7ad9e5 100644
+--- a/dist/raster-layer.js
++++ b/dist/raster-layer.js
+@@ -243,17 +243,34 @@ function meshToBuffers(mesh) {
+     const numVertices = mesh.uvs.length / 2;
+     const texCoords = new Float32Array(mesh.uvs);
+     const positions = new Float64Array(numVertices * 3);
++    const isOOD = new Uint8Array(numVertices);
+     for (let i = 0; i < numVertices; i++) {
+-        positions[i * 3] = mesh.positions[i * 2];
+-        positions[i * 3 + 1] = mesh.positions[i * 2 + 1];
++        const x = mesh.positions[i * 2];
++        const y = mesh.positions[i * 2 + 1];
++        positions[i * 3] = x;
++        positions[i * 3 + 1] = y;
+         // z (flat on the ground)
+         positions[i * 3 + 2] = 0;
++        if (!Number.isFinite(x) || !Number.isFinite(y)) {
++            isOOD[i] = 1;
++        }
++    }
++    // Filter out triangles with out-of-domain vertices to cleanly clip the
++    // rendered mesh at the CRS boundary (e.g. the Mollweide ellipse).
++    const allTriangles = mesh.triangles;
++    const filteredTriangles = [];
++    for (let t = 0; t * 3 < allTriangles.length; t++) {
++        const a = allTriangles[t * 3];
++        const b = allTriangles[t * 3 + 1];
++        const c = allTriangles[t * 3 + 2];
++        if (!isOOD[a] && !isOOD[b] && !isOOD[c]) {
++            filteredTriangles.push(a, b, c);
++        }
+     }
+     // Split the float64 positions into high and low parts for fp64 emulation in
+     // the shader.
+     const [positions64Low, positions64High] = splitFloat64Array(positions);
+-    // TODO: Consider using 16-bit indices if the mesh is small enough
+-    const indices = new Uint32Array(mesh.triangles);
++    const indices = new Uint32Array(filteredTriangles);
+     return {
+         indices,
+         positions64High,
+diff --git a/dist/raster-tileset/raster-tile-traversal.js b/dist/raster-tileset/raster-tile-traversal.js
+index 52b05ddd9d46ed145709a42ac768aaa9d4a1d584..4c26b7f72a5c93d4027257941afcd103071992ad 100644
+--- a/dist/raster-tileset/raster-tile-traversal.js
++++ b/dist/raster-tileset/raster-tile-traversal.js
+@@ -400,7 +400,24 @@ export class RasterTileNode {
+     _getGenericBoundingVolume(zRange) {
+         const tileCorners = this.level.projectedTileCorners(this.x, this.y);
+         const refPointsEPSG3857 = sampleReferencePointsInEPSG3857(REF_POINTS_9, tileCorners, this.descriptor.projectTo3857, this.descriptor.projectTo4326);
+-        const commonSpacePositions = coverWorldIfWide(refPointsEPSG3857.map((xy) => rescaleEPSG3857ToCommonSpace(xy)));
++        const allCommonSpacePositions = coverWorldIfWide(refPointsEPSG3857.map((xy) => rescaleEPSG3857ToCommonSpace(xy)));
++        // Filter out NaN positions that arise when tile corners lie outside the
++        // CRS domain (e.g. corners of a bounding rectangle beyond a Mollweide ellipse).
++        const commonSpacePositions = allCommonSpacePositions.filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y));
++        // If no reference point projects successfully the tile lies entirely
++        // outside the CRS valid domain. Return a degenerate bounding volume
++        // placed far off-screen so frustum culling rejects it.
++        if (commonSpacePositions.length === 0) {
++            const OFF = -1e8;
++            return {
++                boundingVolume: makeOrientedBoundingBoxFromPoints([
++                    [OFF, OFF, zRange[0]], [OFF + 100, OFF, zRange[0]],
++                    [OFF, OFF + 100, zRange[0]], [OFF + 100, OFF + 100, zRange[0]],
++                ]),
++                commonSpaceBounds: [OFF, OFF, OFF + 100, OFF + 100],
++                commonSpacePositions: [[OFF, OFF], [OFF + 100, OFF + 100]],
++            };
++        }
+         // Compute [minx, miny, maxx, maxy] in common space for quick bounds check
+         // TODO: this doesn't densify edges
+         let minX = Number.POSITIVE_INFINITY;
+@@ -421,9 +438,18 @@ export class RasterTileNode {
+                 maxY = y;
+             }
+         }
++        // Ensure minimum 1-unit extent in each axis so makeOrientedBoundingBoxFromPoints
++        // doesn't produce a degenerate OBB for collinear reference points (e.g. Mollweide
++        // tiles where all valid ref points share the same latitude).
++        const safeMaxX = Math.max(maxX, minX + 1);
++        const safeMaxY = Math.max(maxY, minY + 1);
++        const paddedPositions = [
++            [minX, minY], [safeMaxX, minY],
++            [minX, safeMaxY], [safeMaxX, safeMaxY],
++        ];
+         const commonSpaceBounds = [minX, minY, maxX, maxY];
+         return {
+-            boundingVolume: fitBoundingVolume(commonSpacePositions, zRange),
++            boundingVolume: fitBoundingVolume(paddedPositions, zRange),
+             commonSpaceBounds,
+             commonSpacePositions,
+         };

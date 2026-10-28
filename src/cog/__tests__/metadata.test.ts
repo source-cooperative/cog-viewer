@@ -181,7 +181,7 @@ function makeFakeGeoTIFF(opts: {
     nodata: -9999,
     crs: opts.crs ?? 3857,
     bbox: [-180, -85, 180, 85] as [number, number, number, number],
-    cachedTags: {
+    cachedPrimaryImageTags: {
       compression: Compression.Deflate,
       photometric: Photometric.Rgb,
       bitsPerSample: new Uint16Array([16, 16, 16]),

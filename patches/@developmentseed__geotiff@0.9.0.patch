@@ -1,5 +1,5 @@
 diff --git a/dist/crs.js b/dist/crs.js
-index eb7d94897d14f60091cf70c4fb1cd19bbece4be9..1c6fe3561f6d5d8af8a381aaeef707b0d46f8cc9 100644
+index 60027679281e3bb2d137bd1f24d1a83700be1729..bdaa031c364480a8a15e8bd107fc21d4f494a399 100644
 --- a/dist/crs.js
 +++ b/dist/crs.js
 @@ -27,6 +27,7 @@ const CT_POLYCONIC = 22;
@@ -10,7 +10,7 @@ index eb7d94897d14f60091cf70c4fb1cd19bbece4be9..1c6fe3561f6d5d8af8a381aaeef707b0
  const ANGULAR_UNIT_DEGREE = 9102;
  const ANGULAR_UNIT_RADIAN = 9101;
  const ANGULAR_UNIT_GRAD = 9105;
-@@ -449,6 +450,19 @@ function _buildConversion(gkd) {
+@@ -461,6 +462,19 @@ function _buildConversion(gkd) {
                  ],
              };
          }
