@@ -6,7 +6,7 @@ settings:
 
 patchedDependencies:
   '@developmentseed/deck.gl-geotiff@0.9.0':
-    hash: b9ef9ac0579fdd8b35e8434120f0b8b7b7bc1cd80657cb0c612e98ed2309039a
+    hash: 2f0879582174d98eda9241d4f520b615ce331d30d3f47478e9f086c7d7edc0e7
     path: patches/@developmentseed__deck.gl-geotiff@0.9.0.patch
   '@developmentseed/deck.gl-raster@0.9.0':
     hash: dc2a84278a37c3436870590e6f3d168c7d067cb00d897f454c43998f3fab42a1
@@ -57,7 +57,7 @@ importers:
         version: 9.4.1(@deck.gl/core@9.4.1(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@loaders.gl/core@4.5.4)(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/gltf@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))(texture-compressor@1.0.2)
       '@developmentseed/deck.gl-geotiff':
         specifier: 0.9.0
-        version: 0.9.0(patch_hash=b9ef9ac0579fdd8b35e8434120f0b8b7b7bc1cd80657cb0c612e98ed2309039a)(1d44bc3ae1d4f9169383d8454da0c37e)
+        version: 0.9.0(patch_hash=2f0879582174d98eda9241d4f520b615ce331d30d3f47478e9f086c7d7edc0e7)(1d44bc3ae1d4f9169383d8454da0c37e)
       '@developmentseed/deck.gl-raster':
         specifier: 0.9.0
         version: 0.9.0(patch_hash=dc2a84278a37c3436870590e6f3d168c7d067cb00d897f454c43998f3fab42a1)(b333b1fa655780b1994b82a00b0839b8)
@@ -2362,7 +2362,7 @@ snapshots:
 
   '@developmentseed/affine@0.9.0': {}
 
-  '@developmentseed/deck.gl-geotiff@0.9.0(patch_hash=b9ef9ac0579fdd8b35e8434120f0b8b7b7bc1cd80657cb0c612e98ed2309039a)(1d44bc3ae1d4f9169383d8454da0c37e)':
+  '@developmentseed/deck.gl-geotiff@0.9.0(patch_hash=2f0879582174d98eda9241d4f520b615ce331d30d3f47478e9f086c7d7edc0e7)(1d44bc3ae1d4f9169383d8454da0c37e)':
     dependencies:
       '@cogeotiff/core': 9.5.0
       '@deck.gl/core': 9.4.1(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))
