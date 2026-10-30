@@ -1,0 +1,113 @@
+diff --git a/dist/cog-layer.js b/dist/cog-layer.js
+index ee388c079d71daba151980e68e1ed1884d7904c7..62c9049dcfb3e689f42089e753b73c5cd6fd8dc7 100644
+--- a/dist/cog-layer.js
++++ b/dist/cog-layer.js
+@@ -66,10 +66,21 @@ export class COGLayer extends RasterTileLayer {
+                 signal,
+             });
+             const crs = geotiff.crs;
+-            sourceProjection =
+-                typeof crs === "number"
+-                    ? await this.props.epsgResolver(crs)
+-                    : parseWkt(crs);
++            if (typeof crs === "number") {
++                sourceProjection = await this.props.epsgResolver(crs);
++            } else {
++                try {
++                    sourceProjection = parseWkt(crs);
++                } catch (wktErr) {
++                    const matches = [...crs.matchAll(/AUTHORITY\["EPSG","(\d+)"\]/gi)];
++                    const epsgCode = matches.length > 0 ? Number(matches[matches.length - 1][1]) : NaN;
++                    if (!isNaN(epsgCode)) {
++                        sourceProjection = await this.props.epsgResolver(epsgCode);
++                    } else {
++                        throw wktErr;
++                    }
++                }
++            }
+         }
+         catch (err) {
+             // `geotiff` changed or the layer was removed mid-open; drop it.
+diff --git a/dist/geotiff/geotiff.js b/dist/geotiff/geotiff.js
+index 8f973debde0bbbd60548de9e986b06b5f991a824..0000000000000000000000000000000000000000 100644
+--- a/dist/geotiff/geotiff.js
++++ b/dist/geotiff/geotiff.js
+@@ -71,32 +71,54 @@ export async function fetchGeoTIFF(input, options = {}) {
+  */
+ export function getGeographicBounds(geotiff, converter) {
+     const [minX, minY, maxX, maxY] = geotiff.bbox;
+-    // Reproject all four corners to handle rotation/skew
+-    const outline = [
+-        [minX, minY], // bottom-left
+-        [maxX, minY], // bottom-right
+-        [maxX, maxY], // top-right
+-        [minX, maxY], // top-left
+-    ];
+-    const corners = outline.map((corner) => converter.forward(corner));
+-    // Unwrap each corner's longitude by walking the outline to it from the
+-    // previous corner, so an image across the antimeridian goes the short way.
+-    const lons = [corners[0][0]];
+-    for (let i = 1; i < outline.length; i++) {
+-        const [x0, y0] = outline[i - 1];
+-        const [x1, y1] = outline[i];
+-        lons.push(unwrapAlong((t) => converter.forward([x0 + t * (x1 - x0), y0 + t * (y1 - y0)])[0], { start: lons[i - 1], period: 360 }));
+-    }
+-    const lats = corners.map((c) => c[1]);
+-    // Move west into [-180°, 180°), and east with it: east may then run past
+-    // 180°. All the way around the world, or around a pole, gives -180° to 180°.
++    // Sample many points along each edge, walking the boundary as a continuous
++    // path (bottom→right→top→left). For bounded-domain projections (e.g. World
++    // Mollweide / ESRI:54009) some bbox corners lie outside the valid domain and
++    // project to [NaN, NaN] — those are skipped. Walking in order lets us unwrap
++    // longitudes relative to the previous valid sample, so tiles near the
++    // antimeridian are bounded correctly (east can run past 180°).
++    const SAMPLES = 20;
++    let prevValidLon = null;
++    const validLons = [];
++    const validLats = [];
++    const tryProject = (x, y) => {
++        const [lon, lat] = converter.forward([x, y]);
++        if (Number.isFinite(lon) && Number.isFinite(lat)) {
++            let unwrapped = lon;
++            if (prevValidLon !== null) {
++                const diff = lon - prevValidLon;
++                unwrapped = lon - Math.round(diff / 360) * 360;
++            }
++            prevValidLon = unwrapped;
++            validLons.push(unwrapped);
++            validLats.push(lat);
++        }
++    };
++    // Bottom edge (left→right)
++    for (let i = 0; i <= SAMPLES; i++) {
++        tryProject(minX + (i / SAMPLES) * (maxX - minX), minY);
++    }
++    // Right edge (bottom→top)
++    for (let i = 0; i <= SAMPLES; i++) {
++        tryProject(maxX, minY + (i / SAMPLES) * (maxY - minY));
++    }
++    // Top edge (right→left)
++    for (let i = 0; i <= SAMPLES; i++) {
++        tryProject(maxX - (i / SAMPLES) * (maxX - minX), maxY);
++    }
++    // Left edge (top→bottom)
++    for (let i = 0; i <= SAMPLES; i++) {
++        tryProject(minX, maxY - (i / SAMPLES) * (maxY - minY));
++    }
++    if (validLons.length === 0) {
++        return { west: NaN, south: NaN, east: NaN, north: NaN };
++    }
+     const [west, south, east, north] = normalizeLongitudes([
+-        Math.min(...lons),
+-        Math.min(...lats),
+-        Math.max(...lons),
+-        Math.max(...lats),
++        Math.min(...validLons),
++        Math.min(...validLats),
++        Math.max(...validLons),
++        Math.max(...validLats),
+     ]);
+-    // Return bounds in MapLibre format: [[west, south], [east, north]]
+     return { west, south, east, north };
+ }
+ //# sourceMappingURL=geotiff.js.map

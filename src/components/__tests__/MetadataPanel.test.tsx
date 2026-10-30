@@ -34,7 +34,7 @@ function makeStub(opts: { gdalXml?: string | null } = {}): GeoTIFF {
     nodata: -9999,
     crs: 3857,
     bbox: [-180, -85, 180, 85],
-    cachedTags: {
+    cachedPrimaryImageTags: {
       compression: Compression.Deflate,
       photometric: Photometric.MinIsBlack,
       bitsPerSample: new Uint16Array([16]),
