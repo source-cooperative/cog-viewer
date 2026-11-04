@@ -1,8 +1,11 @@
 onlyBuiltDependencies:
   - "@sentry/cli"
 patchedDependencies:
-  '@developmentseed/deck.gl-geotiff@0.9.0': patches/@developmentseed__deck.gl-geotiff@0.9.0.patch
+  # getParentIndex picks the wrong parent when overview sizes were rounded
+  # down, so loading tiles show a placeholder over the wrong area (#45).
   '@developmentseed/deck.gl-raster@0.9.0': patches/@developmentseed__deck.gl-raster@0.9.0.patch
+  # Cylindrical Equal Area support (#28). Fixed upstream in
+  # developmentseed/deck.gl-raster#791 but unreleased as of 0.10.0-beta.2;
+  # delete the geotiff and proj patches when upgrading to a release with it.
   '@developmentseed/geotiff@0.9.0': patches/@developmentseed__geotiff@0.9.0.patch
   '@developmentseed/proj@0.9.0': patches/@developmentseed__proj@0.9.0.patch
-  '@developmentseed/raster-reproject@0.9.0': patches/@developmentseed__raster-reproject@0.9.0.patch

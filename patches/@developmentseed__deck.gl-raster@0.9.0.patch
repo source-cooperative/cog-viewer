@@ -1,98 +1,5 @@
-diff --git a/dist/raster-layer.js b/dist/raster-layer.js
-index 55e4fa8da199a46eb57547654e1edde0cbcf064f..c75b7bbceebd31ab66c69b58ee40f31c9f7ad9e5 100644
---- a/dist/raster-layer.js
-+++ b/dist/raster-layer.js
-@@ -243,17 +243,34 @@ function meshToBuffers(mesh) {
-     const numVertices = mesh.uvs.length / 2;
-     const texCoords = new Float32Array(mesh.uvs);
-     const positions = new Float64Array(numVertices * 3);
-+    const isOOD = new Uint8Array(numVertices);
-     for (let i = 0; i < numVertices; i++) {
--        positions[i * 3] = mesh.positions[i * 2];
--        positions[i * 3 + 1] = mesh.positions[i * 2 + 1];
-+        const x = mesh.positions[i * 2];
-+        const y = mesh.positions[i * 2 + 1];
-+        positions[i * 3] = x;
-+        positions[i * 3 + 1] = y;
-         // z (flat on the ground)
-         positions[i * 3 + 2] = 0;
-+        if (!Number.isFinite(x) || !Number.isFinite(y)) {
-+            isOOD[i] = 1;
-+        }
-+    }
-+    // Filter out triangles with out-of-domain vertices to cleanly clip the
-+    // rendered mesh at the CRS boundary (e.g. the Mollweide ellipse).
-+    const allTriangles = mesh.triangles;
-+    const filteredTriangles = [];
-+    for (let t = 0; t * 3 < allTriangles.length; t++) {
-+        const a = allTriangles[t * 3];
-+        const b = allTriangles[t * 3 + 1];
-+        const c = allTriangles[t * 3 + 2];
-+        if (!isOOD[a] && !isOOD[b] && !isOOD[c]) {
-+            filteredTriangles.push(a, b, c);
-+        }
-     }
-     // Split the float64 positions into high and low parts for fp64 emulation in
-     // the shader.
-     const [positions64Low, positions64High] = splitFloat64Array(positions);
--    // TODO: Consider using 16-bit indices if the mesh is small enough
--    const indices = new Uint32Array(mesh.triangles);
-+    const indices = new Uint32Array(filteredTriangles);
-     return {
-         indices,
-         positions64High,
-diff --git a/dist/raster-tileset/raster-tile-traversal.js b/dist/raster-tileset/raster-tile-traversal.js
-index 52b05ddd9d46ed145709a42ac768aaa9d4a1d584..4c26b7f72a5c93d4027257941afcd103071992ad 100644
---- a/dist/raster-tileset/raster-tile-traversal.js
-+++ b/dist/raster-tileset/raster-tile-traversal.js
-@@ -400,7 +400,24 @@ export class RasterTileNode {
-     _getGenericBoundingVolume(zRange) {
-         const tileCorners = this.level.projectedTileCorners(this.x, this.y);
-         const refPointsEPSG3857 = sampleReferencePointsInEPSG3857(REF_POINTS_9, tileCorners, this.descriptor.projectTo3857, this.descriptor.projectTo4326);
--        const commonSpacePositions = coverWorldIfWide(refPointsEPSG3857.map((xy) => rescaleEPSG3857ToCommonSpace(xy)));
-+        const allCommonSpacePositions = coverWorldIfWide(refPointsEPSG3857.map((xy) => rescaleEPSG3857ToCommonSpace(xy)));
-+        // Filter out NaN positions that arise when tile corners lie outside the
-+        // CRS domain (e.g. corners of a bounding rectangle beyond a Mollweide ellipse).
-+        const commonSpacePositions = allCommonSpacePositions.filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y));
-+        // If no reference point projects successfully the tile lies entirely
-+        // outside the CRS valid domain. Return a degenerate bounding volume
-+        // placed far off-screen so frustum culling rejects it.
-+        if (commonSpacePositions.length === 0) {
-+            const OFF = -1e8;
-+            return {
-+                boundingVolume: makeOrientedBoundingBoxFromPoints([
-+                    [OFF, OFF, zRange[0]], [OFF + 100, OFF, zRange[0]],
-+                    [OFF, OFF + 100, zRange[0]], [OFF + 100, OFF + 100, zRange[0]],
-+                ]),
-+                commonSpaceBounds: [OFF, OFF, OFF + 100, OFF + 100],
-+                commonSpacePositions: [[OFF, OFF], [OFF + 100, OFF + 100]],
-+            };
-+        }
-         // Compute [minx, miny, maxx, maxy] in common space for quick bounds check
-         // TODO: this doesn't densify edges
-         let minX = Number.POSITIVE_INFINITY;
-@@ -421,9 +438,18 @@ export class RasterTileNode {
-                 maxY = y;
-             }
-         }
-+        // Ensure minimum 1-unit extent in each axis so makeOrientedBoundingBoxFromPoints
-+        // doesn't produce a degenerate OBB for collinear reference points (e.g. Mollweide
-+        // tiles where all valid ref points share the same latitude).
-+        const safeMaxX = Math.max(maxX, minX + 1);
-+        const safeMaxY = Math.max(maxY, minY + 1);
-+        const paddedPositions = [
-+            [minX, minY], [safeMaxX, minY],
-+            [minX, safeMaxY], [safeMaxX, safeMaxY],
-+        ];
-         const commonSpaceBounds = [minX, minY, maxX, maxY];
-         return {
--            boundingVolume: fitBoundingVolume(commonSpacePositions, zRange),
-+            boundingVolume: fitBoundingVolume(paddedPositions, zRange),
-             commonSpaceBounds,
-             commonSpacePositions,
-         };
 diff --git a/dist/raster-tileset/raster-tileset-2d.js b/dist/raster-tileset/raster-tileset-2d.js
-index 8d3d87ed30153eeda5e597a8dc24a3724a7fd547..d778f354f8c123c8b156333af0d3b769f0d7c683 100644
+index 8d3d87ed30153eeda5e597a8dc24a3724a7fd547..44cd1c201bef5c9bdc1ecc63686f0155f9e26700 100644
 --- a/dist/raster-tileset/raster-tileset-2d.js
 +++ b/dist/raster-tileset/raster-tileset-2d.js
 @@ -170,9 +170,15 @@ export class RasterTileset2D extends Tileset2D {
@@ -100,11 +7,11 @@ index 8d3d87ed30153eeda5e597a8dc24a3724a7fd547..d778f354f8c123c8b156333af0d3b769
          // an exact multiple like 2 / 2.000000000000004 down to the wrong parent.
          // Add the same tolerance the traversal uses at tile edges before flooring.
 +        // Use the child's centre, not its top-left corner. Overviews whose
-+        // sizes were rounded down (e.g. 98757 -> 49378 px) give a decimation a
-+        // hair above 2, so tiles don't nest exactly; the corner then falls one
-+        // pixel into the left/top neighbour and the "parent" placeholder is
-+        // drawn somewhere else, leaving a hole. The centre picks the parent
-+        // that covers most of the child, and is exact for integer decimation.
++        // sizes were rounded down (e.g. 771 -> 1543 px) give a decimation a
++        // hair above 2, so tiles don't nest exactly; the corner then falls into
++        // the left/top neighbour and the "parent" placeholder is drawn over the
++        // wrong tile, leaving a hole. The centre picks the parent covering most
++        // of the child, and is exact for integer decimation.
          return {
 -            x: Math.floor(index.x / decimationX + TILE_EDGE_TOLERANCE),
 -            y: Math.floor(index.y / decimationY + TILE_EDGE_TOLERANCE),
