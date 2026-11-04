@@ -138,9 +138,11 @@ export function makeMultiBandTileLoader(bandIndexes: number[]) {
     image: GeoTIFF | Overview,
     options: GetTileDataOptions,
   ): Promise<MultiBandTileData> {
-    const { device, x, y, signal } = options;
+    const { device, x, y, signal, pool } = options;
     try {
-      const tile = await image.fetchTile(x, y, { signal, boundless: false });
+      // Pass COGLayer's worker pool; without it, decoding (e.g. WEBP) runs on
+      // the main thread and freezes the tab at deep zoom.
+      const tile = await image.fetchTile(x, y, { signal, pool, boundless: false });
       const array: RasterArray = tile.array;
       const bands = new Map<
         string,
