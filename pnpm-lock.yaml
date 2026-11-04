@@ -5,21 +5,12 @@ settings:
   excludeLinksFromLockfile: false
 
 patchedDependencies:
-  '@developmentseed/deck.gl-geotiff@0.9.0':
-    hash: 2f0879582174d98eda9241d4f520b615ce331d30d3f47478e9f086c7d7edc0e7
-    path: patches/@developmentseed__deck.gl-geotiff@0.9.0.patch
-  '@developmentseed/deck.gl-raster@0.9.0':
-    hash: dc2a84278a37c3436870590e6f3d168c7d067cb00d897f454c43998f3fab42a1
-    path: patches/@developmentseed__deck.gl-raster@0.9.0.patch
   '@developmentseed/geotiff@0.9.0':
     hash: 5dcc6519bced25b8c85eaf5a8fd1fd82c0a0b95b54d6947312b31bcbf4d6990f
     path: patches/@developmentseed__geotiff@0.9.0.patch
   '@developmentseed/proj@0.9.0':
     hash: d14728da13282b36e82733c965f68466c4c0e08e12dc9b88a93c1ce13a951f6c
     path: patches/@developmentseed__proj@0.9.0.patch
-  '@developmentseed/raster-reproject@0.9.0':
-    hash: fc78438a464cf31f9f38104850b0201bc750689fd3e904f9500896c7eebfa836
-    path: patches/@developmentseed__raster-reproject@0.9.0.patch
 
 importers:
 
@@ -57,10 +48,10 @@ importers:
         version: 9.4.1(@deck.gl/core@9.4.1(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@loaders.gl/core@4.5.4)(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/gltf@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))(texture-compressor@1.0.2)
       '@developmentseed/deck.gl-geotiff':
         specifier: 0.9.0
-        version: 0.9.0(patch_hash=2f0879582174d98eda9241d4f520b615ce331d30d3f47478e9f086c7d7edc0e7)(1d44bc3ae1d4f9169383d8454da0c37e)
+        version: 0.9.0(1d44bc3ae1d4f9169383d8454da0c37e)
       '@developmentseed/deck.gl-raster':
         specifier: 0.9.0
-        version: 0.9.0(patch_hash=dc2a84278a37c3436870590e6f3d168c7d067cb00d897f454c43998f3fab42a1)(b333b1fa655780b1994b82a00b0839b8)
+        version: 0.9.0(b333b1fa655780b1994b82a00b0839b8)
       '@developmentseed/geotiff':
         specifier: 0.9.0
         version: 0.9.0(patch_hash=5dcc6519bced25b8c85eaf5a8fd1fd82c0a0b95b54d6947312b31bcbf4d6990f)
@@ -2362,7 +2353,7 @@ snapshots:
 
   '@developmentseed/affine@0.9.0': {}
 
-  '@developmentseed/deck.gl-geotiff@0.9.0(patch_hash=2f0879582174d98eda9241d4f520b615ce331d30d3f47478e9f086c7d7edc0e7)(1d44bc3ae1d4f9169383d8454da0c37e)':
+  '@developmentseed/deck.gl-geotiff@0.9.0(1d44bc3ae1d4f9169383d8454da0c37e)':
     dependencies:
       '@cogeotiff/core': 9.5.0
       '@deck.gl/core': 9.4.1(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))
@@ -2370,11 +2361,11 @@ snapshots:
       '@deck.gl/layers': 9.4.1(@deck.gl/core@9.4.1(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@loaders.gl/core@4.5.4)(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))
       '@deck.gl/mesh-layers': 9.4.1(@deck.gl/core@9.4.1(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))))(@loaders.gl/core@4.5.4)(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/gltf@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/engine@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2))(texture-compressor@1.0.2)
       '@developmentseed/affine': 0.9.0
-      '@developmentseed/deck.gl-raster': 0.9.0(patch_hash=dc2a84278a37c3436870590e6f3d168c7d067cb00d897f454c43998f3fab42a1)(b333b1fa655780b1994b82a00b0839b8)
+      '@developmentseed/deck.gl-raster': 0.9.0(b333b1fa655780b1994b82a00b0839b8)
       '@developmentseed/geotiff': 0.9.0(patch_hash=5dcc6519bced25b8c85eaf5a8fd1fd82c0a0b95b54d6947312b31bcbf4d6990f)
       '@developmentseed/morecantile': 0.9.0
       '@developmentseed/proj': 0.9.0(patch_hash=d14728da13282b36e82733c965f68466c4c0e08e12dc9b88a93c1ce13a951f6c)
-      '@developmentseed/raster-reproject': 0.9.0(patch_hash=fc78438a464cf31f9f38104850b0201bc750689fd3e904f9500896c7eebfa836)
+      '@developmentseed/raster-reproject': 0.9.0
       '@luma.gl/core': 9.4.2
       flatbush: 4.6.2
       proj4: 2.22.0
@@ -2382,7 +2373,7 @@ snapshots:
       - '@luma.gl/shadertools'
       - geotiff
 
-  '@developmentseed/deck.gl-raster@0.9.0(patch_hash=dc2a84278a37c3436870590e6f3d168c7d067cb00d897f454c43998f3fab42a1)(b333b1fa655780b1994b82a00b0839b8)':
+  '@developmentseed/deck.gl-raster@0.9.0(b333b1fa655780b1994b82a00b0839b8)':
     dependencies:
       '@deck.gl/core': 9.4.1(@luma.gl/webgpu@9.4.2(@luma.gl/core@9.4.2)(@luma.gl/shadertools@9.4.2(@luma.gl/core@9.4.2)))
       '@deck.gl/geo-layers': 9.4.1(47ea7cbf63ce61f8bcd937119070e1c3)
@@ -2391,7 +2382,7 @@ snapshots:
       '@developmentseed/affine': 0.9.0
       '@developmentseed/morecantile': 0.9.0
       '@developmentseed/proj': 0.9.0(patch_hash=d14728da13282b36e82733c965f68466c4c0e08e12dc9b88a93c1ce13a951f6c)
-      '@developmentseed/raster-reproject': 0.9.0(patch_hash=fc78438a464cf31f9f38104850b0201bc750689fd3e904f9500896c7eebfa836)
+      '@developmentseed/raster-reproject': 0.9.0
       '@luma.gl/core': 9.4.2
       '@luma.gl/shadertools': 9.4.2(@luma.gl/core@9.4.2)
       '@math.gl/core': 4.1.0
@@ -2430,7 +2421,7 @@ snapshots:
     transitivePeerDependencies:
       - geotiff
 
-  '@developmentseed/raster-reproject@0.9.0(patch_hash=fc78438a464cf31f9f38104850b0201bc750689fd3e904f9500896c7eebfa836)': {}
+  '@developmentseed/raster-reproject@0.9.0': {}
 
   '@emnapi/core@1.10.0':
     dependencies:
