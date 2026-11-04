@@ -75,11 +75,11 @@ index 52b05ddd9d46ed145709a42ac768aaa9d4a1d584..4c26b7f72a5c93d4027257941afcd103
                  maxY = y;
              }
          }
-+        // Ensure minimum 1-unit extent in each axis so makeOrientedBoundingBoxFromPoints
-+        // doesn't produce a degenerate OBB for collinear reference points (e.g. Mollweide
-+        // tiles where all valid ref points share the same latitude).
-+        const safeMaxX = Math.max(maxX, minX + 1);
-+        const safeMaxY = Math.max(maxY, minY + 1);
++        // Ensure a tiny minimum extent so makeOrientedBoundingBoxFromPoints doesn't produce
++        // a degenerate OBB for collinear ref points (e.g. Mollweide edge tiles). Must be far
++        // below a tile: 1 unit (world = 512) inflated deep-zoom tiles ~50 km, killing culling.
++        const safeMaxX = Math.max(maxX, minX + 1e-6);
++        const safeMaxY = Math.max(maxY, minY + 1e-6);
 +        const paddedPositions = [
 +            [minX, minY], [safeMaxX, minY],
 +            [minX, safeMaxY], [safeMaxX, safeMaxY],
