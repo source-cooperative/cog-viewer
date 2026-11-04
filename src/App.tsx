@@ -35,6 +35,7 @@ import {
 } from "./render/stats";
 import { PerBandLinearRescale } from "./render/shader-modules";
 import {
+  destroyTileTextures,
   makeMultiBandTileLoader,
   MAX_BAND_SLOTS,
   setTileErrorHandler,
@@ -465,6 +466,7 @@ export default function App() {
       opacity: state.opacity,
       maxCacheByteSize: MAX_CACHE_BYTE_SIZE,
       getTileData,
+      onTileUnload: destroyTileTextures,
       renderTile,
       beforeId,
       onError: (err: unknown) => {

@@ -68,25 +68,16 @@ export type MultiBandTileData = {
 };
 
 /**
- * Best-effort GPU-texture cleanup. `RasterTileLayer` doesn't surface
- * `onTileUnload`, so we can't deterministically destroy textures when
- * deck.gl evicts a tile. The next-best thing is a `FinalizationRegistry`
- * that fires when the tile data object is GC'd, which in practice happens
- * shortly after eviction. Unfreed textures leak GPU memory; the registry
- * bounds the leak instead of eliminating it.
+ * `onTileUnload` for layers using this loader. COGLayer only frees textures
+ * its own default pipeline created, so with a custom `getTileData` we must
+ * destroy ours when deck.gl evicts a tile. (Relying on GC finalizers leaked:
+ * GPU memory doesn't pressure the JS heap, so GC rarely ran and deep zooms
+ * piled up gigabytes of orphaned textures.)
  */
-const tileFinalizer =
-  typeof FinalizationRegistry !== "undefined"
-    ? new FinalizationRegistry<Texture[]>((textures) => {
-        for (const t of textures) {
-          try {
-            t.destroy();
-          } catch {
-            // best-effort
-          }
-        }
-      })
-    : null;
+export function destroyTileTextures(tile: { content?: unknown }): void {
+  const data = tile.content as MultiBandTileData | null | undefined;
+  for (const { texture } of data?.bands.values() ?? []) texture.destroy();
+}
 
 function singleBandFormat(data: RasterTypedArray): TextureFormat {
   if (data instanceof Uint8Array || data instanceof Uint8ClampedArray) {
@@ -179,7 +170,7 @@ export function makeMultiBandTileLoader(bandIndexes: number[]) {
         // upcasts int16/uint16 to Float32 (4 bytes).
         totalBytes += array.width * array.height * data.BYTES_PER_ELEMENT;
       }
-      const result: MultiBandTileData = {
+      return {
         bands,
         width: array.width,
         height: array.height,
@@ -187,13 +178,6 @@ export function makeMultiBandTileLoader(bandIndexes: number[]) {
         nodata: array.nodata,
         sampleScale,
       };
-      if (tileFinalizer && bands.size > 0) {
-        tileFinalizer.register(
-          result,
-          Array.from(bands.values(), (v) => v.texture),
-        );
-      }
-      return result;
     } catch (err) {
       // Aborts are routine (pan/zoom cancels in-flight tiles) — let them
       // propagate untouched. Any other failure is a real render error the
