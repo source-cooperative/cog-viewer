@@ -99,6 +99,13 @@ function DeckGLOverlay(
 const FETCHED_BANDS = Array.from({ length: MAX_BAND_SLOTS }, (_, i) => i + 1);
 const getTileData = makeMultiBandTileLoader(FETCHED_BANDS);
 
+// deck.gl's default tile cache holds only 5× the on-screen tile count, so
+// zooming in evicts the coarse overview tiles; zooming back out then leaves
+// holes (no loaded ancestor/descendant to use as a placeholder) until the new
+// tiles arrive. A byte budget lifts the count cap and keeps them around.
+// ponytail: fixed 256 MB budget, derive from device limits if GPU memory bites.
+const MAX_CACHE_BYTE_SIZE = 256 * 1024 * 1024;
+
 /** Image-specific URL params that don't make sense across COGs. Cleared
  * whenever the loaded COG(s) change. */
 const IMAGE_SPECIFIC_RESET = {
@@ -423,6 +430,7 @@ export default function App() {
         opacity: state.opacity,
         beforeId,
         renderPipeline,
+        maxCacheByteSize: MAX_CACHE_BYTE_SIZE,
         onGeoTIFFLoad: (
           sourcesMap: Map<string, GeoTIFF>,
           options: { geographicBounds: { west: number; south: number; east: number; north: number } },
@@ -455,6 +463,7 @@ export default function App() {
       epsgResolver: robustEpsgResolver,
       ...(state.urls[0] && isSourceCoopUrl(state.urls[0]) ? { maxRequests: 20 } : {}),
       opacity: state.opacity,
+      maxCacheByteSize: MAX_CACHE_BYTE_SIZE,
       getTileData,
       renderTile,
       beforeId,
