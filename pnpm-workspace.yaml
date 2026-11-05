@@ -1,2 +1,7 @@
 onlyBuiltDependencies:
   - "@sentry/cli"
+patchedDependencies:
+  # Tiles crossing a bounded CRS's domain edge (e.g. the Mollweide ellipse) get
+  # a round-trip-clipped grid mesh instead of streaks across the map (#54).
+  # Not fixed upstream as of 0.10.0-beta.3; guarded by bounded-crs-mesh.test.ts.
+  '@developmentseed/deck.gl-raster@0.10.0-beta.3': patches/@developmentseed__deck.gl-raster@0.10.0-beta.3.patch
