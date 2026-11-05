@@ -33,6 +33,7 @@ import {
   readBandNames,
   type AutoStats,
 } from "./render/stats";
+import { keepDrawnTiles } from "./render/refinement";
 import { PerBandLinearRescale } from "./render/shader-modules";
 import {
   destroyTileTextures,
@@ -432,6 +433,7 @@ export default function App() {
         beforeId,
         renderPipeline,
         maxCacheByteSize: MAX_CACHE_BYTE_SIZE,
+        refinementStrategy: keepDrawnTiles,
         onGeoTIFFLoad: (
           sourcesMap: Map<string, GeoTIFF>,
           options: { geographicBounds: { west: number; south: number; east: number; north: number } },
@@ -465,6 +467,7 @@ export default function App() {
       ...(state.urls[0] && isSourceCoopUrl(state.urls[0]) ? { maxRequests: 20 } : {}),
       opacity: state.opacity,
       maxCacheByteSize: MAX_CACHE_BYTE_SIZE,
+      refinementStrategy: keepDrawnTiles,
       getTileData,
       onTileUnload: destroyTileTextures,
       renderTile,
