@@ -5,6 +5,9 @@ patchedDependencies:
   # down, so loading tiles show a placeholder over the wrong area (#45).
   # Fixed upstream in developmentseed/deck.gl-raster#841, which is newer than
   # 0.10.0-beta.2; delete this patch when upgrading to a release with it.
+  # Also (raster-layer.js): tiles crossing a bounded CRS's domain edge (e.g. the
+  # Mollweide ellipse) get a round-trip-clipped grid mesh instead of streaks
+  # across the map. Not fixed upstream yet; guarded by bounded-crs-mesh.test.ts.
   '@developmentseed/deck.gl-raster@0.9.0': patches/@developmentseed__deck.gl-raster@0.9.0.patch
   # Cylindrical Equal Area support (#28). Fixed upstream in
   # developmentseed/deck.gl-raster#791 but unreleased as of 0.10.0-beta.2;

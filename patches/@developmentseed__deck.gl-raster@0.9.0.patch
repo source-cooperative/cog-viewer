@@ -1,3 +1,167 @@
+diff --git a/dist/raster-layer.js b/dist/raster-layer.js
+index 55e4fa8da199a46eb57547654e1edde0cbcf064f..185e53c9b720e2aa9839b1d8cbce312802ec8a82 100644
+--- a/dist/raster-layer.js
++++ b/dist/raster-layer.js
+@@ -112,24 +112,41 @@ export class RasterLayer extends CompositeLayer {
+         // the mesh. This also solves obvious gaps in between neighboring tiles in
+         // the COGLayer.
+         let reprojector;
++        let reprojected;
+         try {
+-            // When `_wrapX` is defined, make the projection continuous across the
+-            // wrap, so the reprojector meshes an image that crosses it in one piece.
+-            const fns = _wrapX === undefined
+-                ? reprojectionFns
+-                : makeUnwrappedReprojectionFns(reprojectionFns, {
+-                    width,
+-                    height,
+-                    period: _wrapX,
++            // cog-viewer patch: a tile that crosses the edge of the source CRS's
++            // domain (e.g. the Mollweide ellipse) gets a uniform grid with the
++            // out-of-domain cells dropped. proj4 doesn't return NaN there: it
++            // wraps or clamps longitudes, which the adaptive mesh and the unwrap
++            // below turn into triangles stretched across the world.
++            const project = makeDomainProjector(reprojectionFns, width, height);
++            if (isBorderTile(project, width, height)) {
++                reprojected = buildBorderGridMesh(project, width, height, _wrapX);
++            }
++            else {
++                // When `_wrapX` is defined, make the projection continuous across the
++                // wrap, so the reprojector meshes an image that crosses it in one piece.
++                const fns = _wrapX === undefined
++                    ? reprojectionFns
++                    : makeUnwrappedReprojectionFns(reprojectionFns, {
++                        width,
++                        height,
++                        period: _wrapX,
++                    });
++                reprojector = new RasterReprojector(fns, width + 1, height + 1, {
++                    initialTriangulation,
++                    // Measure error on the map, in output pixels. This calls only the
++                    // forward functions, which `_wrapX` needs: it unwraps the forward
++                    // projection, so the inverse functions no longer match it.
++                    _errorSpace: "output",
+                 });
+-            reprojector = new RasterReprojector(fns, width + 1, height + 1, {
+-                initialTriangulation,
+-                // Measure error on the map, in output pixels. This calls only the
+-                // forward functions, which `_wrapX` needs: it unwraps the forward
+-                // projection, so the inverse functions no longer match it.
+-                _errorSpace: "output",
+-            });
+-            reprojector.run(maxError);
++                reprojector.run(maxError);
++                reprojected = {
++                    positions: reprojector.exactOutputPositions,
++                    uvs: reprojector.uvs,
++                    triangles: reprojector.triangles,
++                };
++            }
+         }
+         catch (error) {
+             // Draw nothing rather than the mesh from earlier props, and report it.
+@@ -141,11 +158,6 @@ export class RasterLayer extends CompositeLayer {
+             this.raiseError(error, "building the reprojection mesh");
+             return;
+         }
+-        const reprojected = {
+-            positions: reprojector.exactOutputPositions,
+-            uvs: reprojector.uvs,
+-            triangles: reprojector.triangles,
+-        };
+         // When `_wrapX` is set, the mesh may run past the world's edge.
+         //
+         // We need to cut it on the world's edge, so each part is drawn inside the
+@@ -262,3 +274,89 @@ function meshToBuffers(mesh) {
+     };
+ }
+ //# sourceMappingURL=raster-layer.js.map
++// cog-viewer patch: border tiles of bounded CRSs (e.g. Mollweide).
++const BORDER_GRID_SIZE = 64;
++const BORDER_EDGE_SAMPLES = 16;
++/**
++ * Project a pixel to the output, or return null if it's outside the source
++ * CRS's domain. proj4 doesn't return NaN outside e.g. the Mollweide ellipse:
++ * it wraps or clamps the longitude. So a point is in the domain only if it
++ * round-trips back to where it started, within 1% of the tile's size.
++ */
++function makeDomainProjector(fns, width, height) {
++    const [x0, y0] = fns.forwardTransform(0, 0);
++    const [x1, y1] = fns.forwardTransform(width, height);
++    const tolerance = Math.hypot(x1 - x0, y1 - y0) * 0.01;
++    return (px, py) => {
++        const [x, y] = fns.forwardTransform(px, py);
++        const out = fns.forwardReproject(x, y);
++        if (!Number.isFinite(out[0]) || !Number.isFinite(out[1])) {
++            return null;
++        }
++        const [bx, by] = fns.inverseReproject(out[0], out[1]);
++        // A NaN distance fails the comparison too.
++        return Math.hypot(bx - x, by - y) <= tolerance ? out : null;
++    };
++}
++/**
++ * Whether any point sampled along the tile's edges is out of the domain.
++ * Sampling edges, not only corners, catches a tile whose corners are all
++ * outside while the domain crosses it. Assumes the domain has no holes.
++ */
++function isBorderTile(project, width, height) {
++    for (let i = 0; i <= BORDER_EDGE_SAMPLES; i++) {
++        const s = i / BORDER_EDGE_SAMPLES;
++        if (!project(s * width, 0) ||
++            !project(s * width, height) ||
++            !project(0, s * height) ||
++            !project(width, s * height)) {
++            return true;
++        }
++    }
++    return false;
++}
++/**
++ * A uniform grid over the tile, without the cells that touch an out-of-domain
++ * vertex. The edge is cut at 1/BORDER_GRID_SIZE of the tile. With `period`,
++ * each vertex's x is moved to the copy nearest its already-placed neighbor,
++ * so the mesh is continuous and `clipMeshToWorld` can cut it.
++ */
++function buildBorderGridMesh(project, width, height, period) {
++    const n = BORDER_GRID_SIZE;
++    const positions = [];
++    const uvs = [];
++    const valid = [];
++    for (let r = 0; r <= n; r++) {
++        for (let c = 0; c <= n; c++) {
++            const i = r * (n + 1) + c;
++            const out = project((c / n) * width, (r / n) * height);
++            let x = out ? out[0] : 0;
++            if (out && period !== undefined) {
++                const ref = c > 0 && valid[i - 1] ? i - 1 : r > 0 && valid[i - n - 1] ? i - n - 1 : -1;
++                if (ref >= 0) {
++                    const refX = positions[2 * ref];
++                    x -= Math.round((x - refX) / period) * period;
++                }
++            }
++            positions.push(x, out ? out[1] : 0);
++            uvs.push(c / n, r / n);
++            valid.push(out !== null);
++        }
++    }
++    const triangles = [];
++    for (let r = 0; r < n; r++) {
++        for (let c = 0; c < n; c++) {
++            const i0 = r * (n + 1) + c;
++            const i1 = i0 + 1;
++            const i2 = i0 + n + 1;
++            const i3 = i2 + 1;
++            if (valid[i0] && valid[i2] && valid[i1]) {
++                triangles.push(i0, i2, i1);
++            }
++            if (valid[i1] && valid[i2] && valid[i3]) {
++                triangles.push(i1, i2, i3);
++            }
++        }
++    }
++    return { positions, uvs, triangles };
++}
 diff --git a/dist/raster-tileset/raster-tileset-2d.js b/dist/raster-tileset/raster-tileset-2d.js
 index 8d3d87ed30153eeda5e597a8dc24a3724a7fd547..44cd1c201bef5c9bdc1ecc63686f0155f9e26700 100644
 --- a/dist/raster-tileset/raster-tileset-2d.js
