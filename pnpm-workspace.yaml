@@ -3,6 +3,8 @@ onlyBuiltDependencies:
 patchedDependencies:
   # getParentIndex picks the wrong parent when overview sizes were rounded
   # down, so loading tiles show a placeholder over the wrong area (#45).
+  # Fixed upstream in developmentseed/deck.gl-raster#841, which is newer than
+  # 0.10.0-beta.2; delete this patch when upgrading to a release with it.
   '@developmentseed/deck.gl-raster@0.9.0': patches/@developmentseed__deck.gl-raster@0.9.0.patch
   # Cylindrical Equal Area support (#28). Fixed upstream in
   # developmentseed/deck.gl-raster#791 but unreleased as of 0.10.0-beta.2;
