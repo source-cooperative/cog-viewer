@@ -136,7 +136,7 @@ function fromGdalMetadata(tiff: GeoTIFF): AutoStats {
  * cap never trips. For COGs without a deep overview pyramid (so the
  * coarsest is the primary at full size), the cap keeps app-load from
  * trying to download the entire image. */
-export const MAX_SAMPLE_TILES = 64;
+export const MAX_SAMPLE_TILES = 16;
 
 function* iterBand(arr: RasterArray, b: number): Generator<number> {
   if (arr.layout === "band-separate") {
@@ -223,10 +223,16 @@ async function streamingFromTiles(
   const perBand = new Map<number, BandStats>();
   let initialized = false;
 
-  for (const [x, y] of coords) {
+  // Fire every fetch up front; bin in order so progress stays incremental.
+  const pending = coords.map(([x, y]) =>
+    source.fetchTile(x, y, { signal, boundless: false }),
+  );
+  // An early throw leaves the rest unawaited; swallow them to avoid unhandled rejections.
+  for (const p of pending) p.catch(() => {});
+
+  for (const p of pending) {
     if (signal.aborted) return NULL_STATS;
-    const tile = await source.fetchTile(x, y, { signal, boundless: false });
-    const arr = tile.array;
+    const arr = (await p).array;
 
     if (!initialized) {
       for (let b = 0; b < arr.count; b++) {
@@ -274,12 +280,13 @@ async function batchFromTiles(
   coords: Array<[number, number]>,
   signal: AbortSignal,
 ): Promise<AutoStats> {
-  const tiles: RasterArray[] = [];
-  for (const [x, y] of coords) {
-    if (signal.aborted) return NULL_STATS;
-    const tile = await source.fetchTile(x, y, { signal, boundless: false });
-    tiles.push(tile.array);
-  }
+  const tiles: RasterArray[] = (
+    await Promise.all(
+      coords.map(([x, y]) =>
+        source.fetchTile(x, y, { signal, boundless: false }),
+      ),
+    )
+  ).map((t) => t.array);
   if (signal.aborted || tiles.length === 0) return NULL_STATS;
 
   const bandCount = tiles[0].count;
