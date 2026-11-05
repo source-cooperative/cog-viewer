@@ -6,7 +6,7 @@ import {
   decodeColormapSprite,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import colormapsPngUrl from "@developmentseed/deck.gl-raster/gpu-modules/colormaps.png";
-import type { GeoTIFF } from "@developmentseed/geotiff";
+import { ColorInterp, type GeoTIFF } from "@developmentseed/geotiff";
 import type { Device, Texture } from "@luma.gl/core";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -455,10 +455,18 @@ export default function App() {
     // survives every mode/band/rescale/colormap toggle. Single-band mode
     // additionally needs the colormap sprite uploaded to the device, so we
     // fall back to RGB rendering until that's ready.
+    // 1-based index of the band tagged as alpha (TIFF ExtraSamples), or null.
+    const alphaBand =
+      geotiff.colorInterp.indexOf(ColorInterp.ALPHA) + 1 || null;
     const renderTile =
       state.mode === "single" && colormapTexture
-        ? buildSingleCompositeRenderTile(state, colormapTexture, autoStats)
-        : buildRgbCompositeRenderTile(state, autoStats);
+        ? buildSingleCompositeRenderTile(
+            state,
+            colormapTexture,
+            autoStats,
+            alphaBand,
+          )
+        : buildRgbCompositeRenderTile(state, autoStats, alphaBand);
 
     const cogProps = {
       id: "cog",

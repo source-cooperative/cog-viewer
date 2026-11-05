@@ -29,6 +29,21 @@ export const FilterNaN = {
   },
 } as const;
 
+/** Discards fully transparent pixels. Run right after `CompositeBands` maps
+ * an alpha band into `color.a`: RGB output keeps partial alpha as-is, but
+ * `Colormap` overwrites `color` wholesale, so single-band mode would
+ * otherwise lose the mask. */
+export const FilterTransparent = {
+  name: "filterTransparent",
+  inject: {
+    "fs:DECKGL_FILTER_COLOR": `
+  if (color.a <= 0.0) {
+    discard;
+  }
+`,
+  },
+} as const;
+
 /** Per-channel `LinearRescale`. Same idea as the shipped `LinearRescale`,
  * but min/max are vec3 so each band gets its own range. */
 export const PerBandLinearRescale = {
