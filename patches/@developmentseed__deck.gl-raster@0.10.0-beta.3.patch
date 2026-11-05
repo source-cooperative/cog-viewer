@@ -1,8 +1,8 @@
 diff --git a/dist/raster-layer.js b/dist/raster-layer.js
-index 55e4fa8da199a46eb57547654e1edde0cbcf064f..1e65c2044243d788a0c38a7daffc06964557264e 100644
+index 55e4fa8da199a46eb57547654e1edde0cbcf064f..6f7d632529e4d821bfa025eaedfebceb5026dbc2 100644
 --- a/dist/raster-layer.js
 +++ b/dist/raster-layer.js
-@@ -112,24 +112,41 @@ export class RasterLayer extends CompositeLayer {
+@@ -112,24 +112,45 @@ export class RasterLayer extends CompositeLayer {
          // the mesh. This also solves obvious gaps in between neighboring tiles in
          // the COGLayer.
          let reprojector;
@@ -21,9 +21,13 @@ index 55e4fa8da199a46eb57547654e1edde0cbcf064f..1e65c2044243d788a0c38a7daffc0696
 +            // out-of-domain cells dropped. proj4 doesn't return NaN there: it
 +            // wraps or clamps longitudes, which the adaptive mesh and the unwrap
 +            // below turn into triangles stretched across the world.
++            // Only the part of the tile in `initialTriangulation` (the Web
++            // Mercator latitude band) is checked and meshed, as the adaptive
++            // mesh does.
++            const bounds = uvBounds(initialTriangulation);
 +            const project = makeDomainProjector(reprojectionFns, width, height);
-+            if (isBorderTile(project, width, height)) {
-+                reprojected = buildBorderGridMesh(project, width, height, _wrapX);
++            if (isBorderTile(project, width, height, bounds)) {
++                reprojected = buildBorderGridMesh(project, width, height, bounds, _wrapX);
 +            }
 +            else {
 +                // When `_wrapX` is defined, make the projection continuous across the
@@ -60,7 +64,7 @@ index 55e4fa8da199a46eb57547654e1edde0cbcf064f..1e65c2044243d788a0c38a7daffc0696
          }
          catch (error) {
              // Draw nothing rather than the mesh from earlier props, and report it.
-@@ -141,11 +158,6 @@ export class RasterLayer extends CompositeLayer {
+@@ -141,11 +162,6 @@ export class RasterLayer extends CompositeLayer {
              this.raiseError(error, "building the reprojection mesh");
              return;
          }
@@ -72,60 +76,104 @@ index 55e4fa8da199a46eb57547654e1edde0cbcf064f..1e65c2044243d788a0c38a7daffc0696
          // When `_wrapX` is set, the mesh may run past the world's edge.
          //
          // We need to cut it on the world's edge, so each part is drawn inside the
-@@ -261,4 +273,89 @@ function meshToBuffers(mesh) {
+@@ -261,4 +277,138 @@ function meshToBuffers(mesh) {
          texCoords,
      };
  }
--//# sourceMappingURL=raster-layer.js.map
-\ No newline at end of file
-+//# sourceMappingURL=raster-layer.js.map// cog-viewer patch: border tiles of bounded CRSs (e.g. Mollweide).
++// cog-viewer patch: border tiles of bounded CRSs (e.g. Mollweide).
 +const BORDER_GRID_SIZE = 64;
 +const BORDER_EDGE_SAMPLES = 16;
++/**
++ * The UV bounding box of `initialTriangulation`, or the whole tile. Upstream
++ * only seeds a rectangle (the Web Mercator latitude band).
++ */
++function uvBounds(triangulation) {
++    if (!triangulation) {
++        return [0, 0, 1, 1];
++    }
++    const { uvs } = triangulation;
++    let u0 = Infinity;
++    let v0 = Infinity;
++    let u1 = -Infinity;
++    let v1 = -Infinity;
++    for (let i = 0; i < uvs.length; i += 2) {
++        u0 = Math.min(u0, uvs[i]);
++        u1 = Math.max(u1, uvs[i]);
++        v0 = Math.min(v0, uvs[i + 1]);
++        v1 = Math.max(v1, uvs[i + 1]);
++    }
++    return [u0, v0, u1, v1];
++}
 +/**
 + * Project a pixel to the output, or return null if it's outside the source
 + * CRS's domain. proj4 doesn't return NaN outside e.g. the Mollweide ellipse:
 + * it wraps or clamps the longitude. So a point is in the domain only if it
 + * round-trips back to where it started, within 1% of the tile's size.
++ *
++ * A valid point can also come back a whole period away: longitude 200° comes
++ * back as -160°. That shift leaves the projection unchanged on every row of
++ * the tile, so the point is kept. Outside a bounded domain such as the
++ * Mollweide ellipse, the shift depends on the row, so the point is dropped.
 + */
 +function makeDomainProjector(fns, width, height) {
-+    const [x0, y0] = fns.forwardTransform(0, 0);
-+    const [x1, y1] = fns.forwardTransform(width, height);
++    const { forwardTransform, forwardReproject, inverseReproject } = fns;
++    const [x0, y0] = forwardTransform(0, 0);
++    const [x1, y1] = forwardTransform(width, height);
 +    const tolerance = Math.hypot(x1 - x0, y1 - y0) * 0.01;
++    const isPeriod = (px, dx, dy) => [0, height / 2, height].every((py) => {
++        const [sx, sy] = forwardTransform(px, py);
++        const a = forwardReproject(sx, sy);
++        const b = forwardReproject(sx + dx, sy + dy);
++        // A NaN distance fails the comparison too.
++        return (Math.hypot(b[0] - a[0], b[1] - a[1]) <=
++            1e-9 * (1 + Math.hypot(a[0], a[1])));
++    });
 +    return (px, py) => {
-+        const [x, y] = fns.forwardTransform(px, py);
-+        const out = fns.forwardReproject(x, y);
++        const [x, y] = forwardTransform(px, py);
++        const out = forwardReproject(x, y);
 +        if (!Number.isFinite(out[0]) || !Number.isFinite(out[1])) {
 +            return null;
 +        }
-+        const [bx, by] = fns.inverseReproject(out[0], out[1]);
++        const [bx, by] = inverseReproject(out[0], out[1]);
++        const dx = bx - x;
++        const dy = by - y;
 +        // A NaN distance fails the comparison too.
-+        return Math.hypot(bx - x, by - y) <= tolerance ? out : null;
++        if (Math.hypot(dx, dy) <= tolerance) {
++            return out;
++        }
++        return Number.isFinite(dx) && Number.isFinite(dy) && isPeriod(px, dx, dy)
++            ? out
++            : null;
 +    };
 +}
 +/**
-+ * Whether any point sampled along the tile's edges is out of the domain.
-+ * Sampling edges, not only corners, catches a tile whose corners are all
-+ * outside while the domain crosses it. Assumes the domain has no holes.
++ * Whether any point sampled along the edges of the tile's `bounds` is out of
++ * the domain. Sampling edges, not only corners, catches a tile whose corners
++ * are all outside while the domain crosses it. Assumes the domain has no
++ * holes. Walks the outline once, so each corner is sampled once.
 + */
-+function isBorderTile(project, width, height) {
-+    for (let i = 0; i <= BORDER_EDGE_SAMPLES; i++) {
++function isBorderTile(project, width, height, [u0, v0, u1, v1]) {
++    for (let i = 0; i < BORDER_EDGE_SAMPLES; i++) {
 +        const s = i / BORDER_EDGE_SAMPLES;
-+        if (!project(s * width, 0) ||
-+            !project(s * width, height) ||
-+            !project(0, s * height) ||
-+            !project(width, s * height)) {
++        const u = u0 + s * (u1 - u0);
++        const v = v0 + s * (v1 - v0);
++        if (!project(u * width, v0 * height) ||
++            !project(u1 * width, v * height) ||
++            !project((u1 + u0 - u) * width, v1 * height) ||
++            !project(u0 * width, (v1 + v0 - v) * height)) {
 +            return true;
 +        }
 +    }
 +    return false;
 +}
 +/**
-+ * A uniform grid over the tile, without the cells that touch an out-of-domain
-+ * vertex. The edge is cut at 1/BORDER_GRID_SIZE of the tile. With `period`,
-+ * each vertex's x is moved to the copy nearest its already-placed neighbor,
-+ * so the mesh is continuous and `clipMeshToWorld` can cut it.
++ * A uniform grid over the tile's `bounds`, without the cells that touch an
++ * out-of-domain vertex. The edge is cut at 1/BORDER_GRID_SIZE of the tile.
++ * With `period`, each vertex's x is moved to the copy nearest its
++ * already-placed neighbor, so the mesh is continuous and `clipMeshToWorld`
++ * can cut it.
 + */
-+function buildBorderGridMesh(project, width, height, period) {
++function buildBorderGridMesh(project, width, height, [u0, v0, u1, v1], period) {
 +    const n = BORDER_GRID_SIZE;
 +    const positions = [];
 +    const uvs = [];
@@ -133,7 +181,9 @@ index 55e4fa8da199a46eb57547654e1edde0cbcf064f..1e65c2044243d788a0c38a7daffc0696
 +    for (let r = 0; r <= n; r++) {
 +        for (let c = 0; c <= n; c++) {
 +            const i = r * (n + 1) + c;
-+            const out = project((c / n) * width, (r / n) * height);
++            const u = u0 + (c / n) * (u1 - u0);
++            const v = v0 + (r / n) * (v1 - v0);
++            const out = project(u * width, v * height);
 +            let x = out ? out[0] : 0;
 +            if (out && period !== undefined) {
 +                const ref = c > 0 && valid[i - 1] ? i - 1 : r > 0 && valid[i - n - 1] ? i - n - 1 : -1;
@@ -143,7 +193,7 @@ index 55e4fa8da199a46eb57547654e1edde0cbcf064f..1e65c2044243d788a0c38a7daffc0696
 +                }
 +            }
 +            positions.push(x, out ? out[1] : 0);
-+            uvs.push(c / n, r / n);
++            uvs.push(u, v);
 +            valid.push(out !== null);
 +        }
 +    }
@@ -164,3 +214,4 @@ index 55e4fa8da199a46eb57547654e1edde0cbcf064f..1e65c2044243d788a0c38a7daffc0696
 +    }
 +    return { positions, uvs, triangles };
 +}
+ //# sourceMappingURL=raster-layer.js.map
