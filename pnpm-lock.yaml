@@ -47,6 +47,9 @@ importers:
       '@developmentseed/geotiff':
         specifier: 0.10.0-beta.3
         version: 0.10.0-beta.3
+      '@developmentseed/proj':
+        specifier: 0.10.0-beta.3
+        version: 0.10.0-beta.3
       '@luma.gl/core':
         specifier: ^9.4.2
         version: 9.4.2
@@ -2024,9 +2027,6 @@ packages:
     engines: {node: '>=8'}
     hasBin: true
 
-  wkt-parser@1.5.6:
-    resolution: {integrity: sha512-cqHU3lzGt/gt2OqIORP0uVy5yeOX43WABmgFkmJsmcqH3HhQo9PiJG6ftytwGKmpQUbegeX7+pQc2BuNCRfcrw==}
-
   wkt-parser@1.6.0:
     resolution: {integrity: sha512-O2WMUagkdOKkgcfqZBUauysHVeifCwcs+zUd2QG7UIzVljLwK9g5xHUfL/TkQFwmQ3eF7oHFKGnMcb/kZdvbaw==}
 
@@ -3824,7 +3824,7 @@ snapshots:
   proj4@2.22.0:
     dependencies:
       mgrs: 1.0.0
-      wkt-parser: 1.5.6
+      wkt-parser: 1.6.0
 
   protocol-buffers-schema@3.6.1: {}
 
@@ -4108,8 +4108,6 @@ snapshots:
     dependencies:
       siginfo: 2.0.0
       stackback: 0.0.2
-
-  wkt-parser@1.5.6: {}
 
   wkt-parser@1.6.0: {}
 
