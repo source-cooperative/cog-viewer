@@ -136,7 +136,7 @@ export default function App() {
   const prefersDark = usePrefersDark();
   const [device, setDevice] = useState<Device | null>(null);
   const [colormapTexture, setColormapTexture] = useState<Texture | null>(null);
-  const [geotiff, setGeotiff] = useState<GeoTIFF | null>(null);
+  const [mapReady, setMapReady] = useState(false);
   const [autoStats, setAutoStats] = useState<AutoStats | null>(null);
   const [bandCount, setBandCount] = useState<number | null>(null);
   const [bandNames, setBandNames] = useState<Map<number, string> | null>(null);
@@ -146,6 +146,14 @@ export default function App() {
   // and to check the extent first: a source with invalid bounds is never set,
   // so mislocated tiles never paint under the "could not determine" error.
   const [source, setSource] = useState<COGSource | MultiCOGSource | null>(null);
+  // The single-file GeoTIFF (for the controls panel), and the file auto-stats
+  // sample: the single file, or a multi-COG's first file.
+  const geotiff = source instanceof COGSource ? source.geotiff : null;
+  const statsTiff: GeoTIFF | null =
+    geotiff ??
+    (source instanceof MultiCOGSource
+      ? (source.geotiffs.values().next().value ?? null)
+      : null);
   // Non-blocking notice (e.g. a COG with no overviews) — rendered as an amber
   // Toast alongside the red error one; the two are mutually exclusive per load.
   const [warning, setWarning] = useState<string | null>(null);
@@ -193,7 +201,6 @@ export default function App() {
   // malformed Range headers and a full-file download. See load-geotiff.ts.
   useEffect(() => {
     urlZoomAtCogLoad.current = state.zoom;
-    setGeotiff(null);
     setSource(null);
     setAutoStats(null);
     setBandCount(null);
@@ -209,33 +216,32 @@ export default function App() {
     // fitBounds throws an uncaught "Invalid LngLat" deep inside maplibre-gl,
     // so bail out with a clear message instead.
     const acceptBounds = (s: COGSource | MultiCOGSource): boolean => {
-      if (!isValidGeographicBounds(s.geographicBounds)) {
-        setError(
-          "Could not determine this COG's geographic extent — its " +
-            "coordinate reference system may be missing or unsupported.",
-        );
-        return false;
-      }
-      // Skip fitBounds when the URL already encodes a viewport (shared link).
-      if (urlZoomAtCogLoad.current === null) {
-        const { west, south, east, north } = s.geographicBounds;
-        mapRef.current?.fitBounds(
-          [[west, south], [east, north]],
-          { padding: 40, duration: 0 },
-        );
-      }
-      return true;
+      if (isValidGeographicBounds(s.geographicBounds)) return true;
+      setError(
+        "Could not determine this COG's geographic extent — its " +
+          "coordinate reference system may be missing or unsupported.",
+      );
+      return false;
     };
 
     if (state.urls.length > 1) {
-      // Multi-COG: one band per file. Auto-stats come from the first file so
-      // the renderPipeline can include a LinearRescale step.
+      // Multi-COG: one band per file.
       const ctrl = new AbortController();
       (async () => {
         try {
           const tiffs = await Promise.all(
             state.urls.map((u) => loadGeoTIFF(normalizeUrl(u))),
           );
+          if (cancelled) return;
+          // Same up-front COG check as the single-file path (see below).
+          const issues = tiffs.map(validateCog);
+          const fatal = issues.find((i) => i?.level === "error");
+          if (fatal) {
+            setError(fatal.message);
+            return;
+          }
+          const warn = issues.find((i) => i?.level === "warning");
+          if (warn) setWarning(warn.message);
           const multi = await MultiCOGSource.open(
             Object.fromEntries(keys.map((k, i) => [k, tiffs[i]])),
             { epsgResolver: robustEpsgResolver, signal: ctrl.signal },
@@ -243,10 +249,6 @@ export default function App() {
           if (cancelled || !acceptBounds(multi)) return;
           setBandCount(multi.geotiffs.size);
           setSource(multi);
-          const stats = await computeAutoStats(tiffs[0], ctrl.signal, (partial) => {
-            if (!ctrl.signal.aborted) setAutoStats(partial);
-          });
-          if (!ctrl.signal.aborted) setAutoStats(stats);
         } catch (err) {
           if (!cancelled) {
             console.error("multi-COG load failed", err);
@@ -278,7 +280,6 @@ export default function App() {
           epsgResolver: robustEpsgResolver,
         });
         if (cancelled || !acceptBounds(single)) return;
-        setGeotiff(tiff);
         setBandCount(tiff.count);
         setBandNames(readBandNames(tiff));
         setSource(single);
@@ -308,8 +309,8 @@ export default function App() {
     return () => setTileErrorHandler(null);
   }, []);
 
-  // Safety net: show any async failure deck.gl-geotiff doesn't surface (it
-  // has no onError prop) as a toast instead of failing silently.
+  // Safety net: show any stray async failure as a toast instead of failing
+  // silently. Layer errors arrive through the layers' onError prop.
   useEffect(() => {
     const handle = (e: PromiseRejectionEvent) => {
       console.error("[cog-viewer] Unhandled rejection:", e.reason);
@@ -319,13 +320,26 @@ export default function App() {
     return () => window.removeEventListener("unhandledrejection", handle);
   }, []);
 
-  // When we have a GeoTIFF for the current URL, compute auto-stats once.
+  // Fit the map to the opened COG once per load. Waits for the map: it loads
+  // maplibre-gl asynchronously, so mapRef can still be null when the source
+  // opens. Skipped when the URL already encodes a viewport (shared link).
   useEffect(() => {
-    if (!geotiff) return;
+    if (!source || !mapReady || urlZoomAtCogLoad.current !== null) return;
+    const { west, south, east, north } = source.geographicBounds;
+    mapRef.current?.fitBounds(
+      [[west, south], [east, north]],
+      { padding: 40, duration: 0 },
+    );
+  }, [source, mapReady]);
+
+  // Once the COG(s) are open, compute auto-stats once. Multi-COG takes them
+  // from the first file so the renderPipeline can include a LinearRescale step.
+  useEffect(() => {
+    if (!statsTiff) return;
     const ctrl = new AbortController();
     (async () => {
       try {
-        const stats = await computeAutoStats(geotiff, ctrl.signal, (partial) => {
+        const stats = await computeAutoStats(statsTiff, ctrl.signal, (partial) => {
           if (!ctrl.signal.aborted) setAutoStats(partial);
         });
         if (!ctrl.signal.aborted) setAutoStats(stats);
@@ -334,7 +348,7 @@ export default function App() {
       }
     })();
     return () => ctrl.abort();
-  }, [geotiff]);
+  }, [statsTiff]);
 
   // After bandCount resolves for a single-file COG, fire a one-shot auto-pick
   // of mode + bands when the user hasn't set them. Not used for multi-COG
@@ -375,6 +389,12 @@ export default function App() {
       state.basemap !== "satellite" && state.basemap !== "off";
     const beforeId =
       state.labelsAbove && labelsAvailable ? firstSymbolId : undefined;
+    // deck.gl reports layer failures (e.g. "Can't draw the source") here, not
+    // as rejections; without it they only reach the console.
+    const onError = (err: Error) => {
+      console.error("[cog-viewer] layer error:", err);
+      setError((prev) => prev ?? humanizeError(err));
+    };
 
     // Multi-COG path: each URL is one band from a separate file.
     if (source instanceof MultiCOGSource) {
@@ -424,6 +444,7 @@ export default function App() {
         renderPipeline,
         maxCacheByteSize: MAX_CACHE_BYTE_SIZE,
         refinementStrategy: keepDrawnTiles,
+        onError,
       });
     }
 
@@ -457,6 +478,7 @@ export default function App() {
       getTileData,
       onTileUnload: destroyTileTextures,
       renderTile,
+      onError,
       ...{ beforeId }, // @deck.gl/mapbox interleaved prop, not in the layer types
     });
   }, [
@@ -495,6 +517,7 @@ export default function App() {
           zoom: state.zoom ?? 2,
         }}
         mapStyle={resolveBasemap(state.basemap, prefersDark)}
+        onLoad={() => setMapReady(true)}
         onMoveEnd={(e) => {
           const { longitude, latitude, zoom } = e.viewState;
           update({ longitude, latitude, zoom });
