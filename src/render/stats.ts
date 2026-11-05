@@ -1,8 +1,9 @@
 import { TiffTag } from "@cogeotiff/core";
-import type {
-  GeoTIFF,
-  Overview,
-  RasterArray,
+import {
+  defaultDecoderPool,
+  type GeoTIFF,
+  type Overview,
+  type RasterArray,
 } from "@developmentseed/geotiff";
 import { fetchTile, shareTiles } from "./shared-tiles";
 
@@ -225,8 +226,9 @@ async function streamingFromTiles(
   let initialized = false;
 
   // Fire every fetch up front; bin in order so progress stays incremental.
+  const pool = defaultDecoderPool();
   const pending = coords.map(([x, y]) =>
-    fetchTile(source, x, y, { signal, boundless: false }),
+    fetchTile(source, x, y, { signal, pool, boundless: false }),
   );
   // An early throw leaves the rest unawaited; swallow them to avoid unhandled rejections.
   for (const p of pending) p.catch(() => {});
@@ -281,10 +283,11 @@ async function batchFromTiles(
   coords: Array<[number, number]>,
   signal: AbortSignal,
 ): Promise<AutoStats> {
+  const pool = defaultDecoderPool();
   const tiles: RasterArray[] = (
     await Promise.all(
       coords.map(([x, y]) =>
-        fetchTile(source, x, y, { signal, boundless: false }),
+        fetchTile(source, x, y, { signal, pool, boundless: false }),
       ),
     )
   ).map((t) => t.array);
@@ -351,7 +354,11 @@ async function fromSampledTiles(
   const coords = pickSampleCoords(source.tileCount);
   if (coords.length === 0) return NULL_STATS;
 
-  shareTiles(source, coords);
+  if (signal.aborted) return NULL_STATS;
+  // Hold shared tiles until this run is cancelled (COG switched / unmounted);
+  // after that the map that would reuse them is gone.
+  const release = shareTiles(source, coords);
+  signal.addEventListener("abort", release, { once: true });
   if (priors) {
     return streamingFromTiles(source, coords, priors, signal, onProgress);
   }

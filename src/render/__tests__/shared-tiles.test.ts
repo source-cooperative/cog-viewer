@@ -26,6 +26,25 @@ describe("shared tile fetches", () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
+  it("release drops tiles nobody took a second time", async () => {
+    const { image, fetch } = fakeImage();
+    const release = shareTiles(image, [[0, 0]]);
+    await fetchTile(image, 0, 0, {}); // stats
+    release(); // COG switched before the map asked
+    await fetchTile(image, 0, 0, {});
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("a stale release doesn't drop a newer share", async () => {
+    const { image, fetch } = fakeImage();
+    const stale = shareTiles(image, [[0, 0]]);
+    shareTiles(image, [[0, 0]]);
+    stale();
+    await fetchTile(image, 0, 0, {});
+    await fetchTile(image, 0, 0, {});
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it("one caller aborting doesn't cancel the other", async () => {
     const { image } = fakeImage();
     shareTiles(image, [[0, 0]]);

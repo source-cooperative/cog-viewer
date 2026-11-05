@@ -12,9 +12,20 @@ const shared = new WeakMap<Image, Map<string, Entry>>();
  * deck.gl draws it, so without sharing those tiles download twice. Marks
  * `coords` of `image` as shared: the first {@link fetchTile} for each one
  * downloads it, the second (stats + map) reuses it and drops it.
+ *
+ * Returns a release function that drops any tiles still held. Call it when
+ * the map can no longer ask for them: `loadGeoTIFF` caches every GeoTIFF for
+ * the session, so waiting for the image to be GC'd would hold them forever.
  */
-export function shareTiles(image: Image, coords: Array<[number, number]>) {
-  shared.set(image, new Map(coords.map(([x, y]) => [`${x},${y}`, { takes: 0 }])));
+export function shareTiles(
+  image: Image,
+  coords: Array<[number, number]>,
+): () => void {
+  const tiles = new Map(coords.map(([x, y]) => [`${x},${y}`, { takes: 0 }]));
+  shared.set(image, tiles);
+  return () => {
+    if (shared.get(image) === tiles) shared.delete(image);
+  };
 }
 
 /** `image.fetchTile`, deduped for tiles marked by {@link shareTiles}. */
@@ -34,8 +45,8 @@ export function fetchTile(
     entry.p = image.fetchTile(x, y, { ...opts, signal: undefined });
     entry.p.catch(() => tiles.delete(key));
   }
-  // ponytail: a tile deck.gl never asks for stays held until the GeoTIFF is
-  // dropped; bounded by MAX_SAMPLE_TILES.
+  // ponytail: a tile deck.gl never asks for stays held until the caller
+  // releases it; bounded by MAX_SAMPLE_TILES.
   if (++entry.takes >= 2) tiles.delete(key);
   return opts.signal ? withSignal(entry.p, opts.signal) : entry.p;
 }
