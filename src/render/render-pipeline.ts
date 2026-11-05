@@ -201,8 +201,8 @@ function buildRenderTile(
       pickMapping(data, requested, mode.kind);
     if (!mapping) return { renderPipeline: [] };
     // An alpha band (TIFF ExtraSamples) masks invalid pixels the same way
-    // nodata does. ponytail: only honoured when it's within the fetched
-    // MAX_BAND_SLOTS; internal mask IFDs aren't handled yet.
+    // nodata does. The loader always fetches it, wherever it sits.
+    // ponytail: internal mask IFDs aren't handled yet.
     const hasAlpha = alphaBand !== null && data.bands.has(String(alphaBand));
     if (hasAlpha) mapping.a = String(alphaBand);
 

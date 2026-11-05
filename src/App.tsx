@@ -93,7 +93,19 @@ function DeckGLOverlay(
 // allocating a fresh closure per render would defeat the stable-id design and
 // refetch tiles on every state change (opacity drag, band swap, etc.).
 const FETCHED_BANDS = Array.from({ length: MAX_BAND_SLOTS }, (_, i) => i + 1);
-const getTileData = makeMultiBandTileLoader(FETCHED_BANDS);
+// One loader per alpha band index, so files whose alpha sits past the first
+// MAX_BAND_SLOTS bands (e.g. R,G,B,NIR,Alpha) still upload it.
+const tileLoaders = new Map<number | null, ReturnType<typeof makeMultiBandTileLoader>>();
+function getTileLoader(alphaBand: number | null) {
+  // An alpha within FETCHED_BANDS is already fetched, so share the default loader.
+  const extra = alphaBand && alphaBand > MAX_BAND_SLOTS ? alphaBand : null;
+  let loader = tileLoaders.get(extra);
+  if (!loader) {
+    loader = makeMultiBandTileLoader(extra ? [...FETCHED_BANDS, extra] : FETCHED_BANDS);
+    tileLoaders.set(extra, loader);
+  }
+  return loader;
+}
 
 // deck.gl's default tile cache holds only 5× the on-screen tile count, so
 // zooming in evicts the coarse overview tiles; zooming back out then leaves
@@ -475,7 +487,7 @@ export default function App() {
       opacity: state.opacity,
       maxCacheByteSize: MAX_CACHE_BYTE_SIZE,
       refinementStrategy: keepDrawnTiles,
-      getTileData,
+      getTileData: getTileLoader(alphaBand),
       onTileUnload: destroyTileTextures,
       renderTile,
       onError,
