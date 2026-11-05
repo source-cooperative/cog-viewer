@@ -6,6 +6,7 @@ import type {
   RasterTypedArray,
 } from "@developmentseed/geotiff";
 import type { Texture, TextureFormat } from "@luma.gl/core";
+import { fetchTile } from "./shared-tiles";
 
 /** Mirrors `MAX_BAND_SLOTS` in deck.gl-raster's `composite-bands.ts`, which
  * isn't re-exported from the package entry. The CompositeBands shader has
@@ -142,7 +143,7 @@ export function makeMultiBandTileLoader(bandIndexes: number[]) {
     try {
       // Pass COGLayer's worker pool; without it, decoding (e.g. WEBP) runs on
       // the main thread and freezes the tab at deep zoom.
-      const tile = await image.fetchTile(x, y, { signal, pool, boundless: false });
+      const tile = await fetchTile(image, x, y, { signal, pool, boundless: false });
       const array: RasterArray = tile.array;
       const bands = new Map<
         string,

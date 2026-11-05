@@ -4,6 +4,7 @@ import type {
   Overview,
   RasterArray,
 } from "@developmentseed/geotiff";
+import { fetchTile, openShareWindow } from "./shared-tiles";
 
 /**
  * Parse band descriptions from the GDAL_METADATA XML tag. Looks for
@@ -225,7 +226,7 @@ async function streamingFromTiles(
 
   for (const [x, y] of coords) {
     if (signal.aborted) return NULL_STATS;
-    const tile = await source.fetchTile(x, y, { signal, boundless: false });
+    const tile = await fetchTile(source, x, y, { signal, boundless: false });
     const arr = tile.array;
 
     if (!initialized) {
@@ -277,7 +278,7 @@ async function batchFromTiles(
   const tiles: RasterArray[] = [];
   for (const [x, y] of coords) {
     if (signal.aborted) return NULL_STATS;
-    const tile = await source.fetchTile(x, y, { signal, boundless: false });
+    const tile = await fetchTile(source, x, y, { signal, boundless: false });
     tiles.push(tile.array);
   }
   if (signal.aborted || tiles.length === 0) return NULL_STATS;
@@ -343,10 +344,15 @@ async function fromSampledTiles(
   const coords = pickSampleCoords(source.tileCount);
   if (coords.length === 0) return NULL_STATS;
 
-  if (priors) {
-    return streamingFromTiles(source, coords, priors, signal, onProgress);
+  const close = openShareWindow(source);
+  try {
+    if (priors) {
+      return await streamingFromTiles(source, coords, priors, signal, onProgress);
+    }
+    return await batchFromTiles(source, coords, signal);
+  } finally {
+    close();
   }
-  return batchFromTiles(source, coords, signal);
 }
 
 /** Compute auto-stats for a GeoTIFF. Prefers author-supplied min/max
