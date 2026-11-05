@@ -129,8 +129,8 @@ function extractBand(
  * Render pipelines can then swizzle channels via `CompositeBands` without
  * a re-fetch.
  *
- * The CompositeBands shader has {@link MAX_BAND_SLOTS} fixed slots, so the
- * caller is responsible for keeping `bandIndexes.length <= MAX_BAND_SLOTS`.
+ * The CompositeBands shader binds at most {@link MAX_BAND_SLOTS} of these
+ * textures (r/g/b/a); extra bands (e.g. an alpha past band 4) are fine.
  * Indexes that exceed the COG's actual band count are silently skipped.
  */
 export function makeMultiBandTileLoader(bandIndexes: number[]) {
