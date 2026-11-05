@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fetchTile, openShareWindow } from "../shared-tiles";
+import { fetchTile, shareTiles } from "../shared-tiles";
 
 function fakeImage() {
   const fetch = vi.fn(async (x: number, y: number) => ({ x, y }));
@@ -7,29 +7,33 @@ function fakeImage() {
 }
 
 describe("shared tile fetches", () => {
-  it("dedupes while a window is open, not after it closes", async () => {
+  it("shares a marked tile once, then lets go of it", async () => {
     const { image, fetch } = fakeImage();
-    const close = openShareWindow(image);
-    const [a, b] = await Promise.all([
-      fetchTile(image, 1, 2, {}),
-      fetchTile(image, 1, 2, {}),
-    ]);
+    shareTiles(image, [[1, 2]]);
+    const a = await fetchTile(image, 1, 2, {}); // stats
+    const b = await fetchTile(image, 1, 2, {}); // map, after stats finished
     expect(a).toBe(b);
     expect(fetch).toHaveBeenCalledTimes(1);
-    close();
-    await fetchTile(image, 1, 2, {});
+    await fetchTile(image, 1, 2, {}); // later refetch isn't held
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("doesn't share unmarked tiles", async () => {
+    const { image, fetch } = fakeImage();
+    shareTiles(image, [[0, 0]]);
+    await fetchTile(image, 5, 5, {});
+    await fetchTile(image, 5, 5, {});
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   it("one caller aborting doesn't cancel the other", async () => {
     const { image } = fakeImage();
-    const close = openShareWindow(image);
+    shareTiles(image, [[0, 0]]);
     const ctrl = new AbortController();
     const aborted = fetchTile(image, 0, 0, { signal: ctrl.signal });
     const kept = fetchTile(image, 0, 0, {});
     ctrl.abort();
     await expect(aborted).rejects.toMatchObject({ name: "AbortError" });
     await expect(kept).resolves.toEqual({ x: 0, y: 0 });
-    close();
   });
 });
