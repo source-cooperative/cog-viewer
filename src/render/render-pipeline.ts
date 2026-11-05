@@ -18,6 +18,7 @@ import {
 } from "./stats";
 import {
   FilterNaN,
+  FilterTransparent,
   Gamma,
   LogStretch,
   PerBandLinearRescale,
@@ -188,6 +189,7 @@ function buildRenderTile(
   state: CogState,
   autoStats: AutoStats | null,
   mode: RenderTileMode,
+  alphaBand: number | null,
 ) {
   return function renderTile(data: MultiBandTileData): RenderTileResult {
     if (data.bands.size === 0) return { renderPipeline: [] };
@@ -195,13 +197,20 @@ function buildRenderTile(
       mode.kind === "single"
         ? [state.bands?.[0] ?? 1]
         : (state.bands ?? [1, 2, 3]);
-    const mapping = pickMapping(data, requested, mode.kind);
+    const mapping: { r: string; g?: string; b?: string; a?: string } | null =
+      pickMapping(data, requested, mode.kind);
     if (!mapping) return { renderPipeline: [] };
+    // An alpha band (TIFF ExtraSamples) masks invalid pixels the same way
+    // nodata does. ponytail: only honoured when it's within the fetched
+    // MAX_BAND_SLOTS; internal mask IFDs aren't handled yet.
+    const hasAlpha = alphaBand !== null && data.bands.has(String(alphaBand));
+    if (hasAlpha) mapping.a = String(alphaBand);
 
     const compositeProps = buildCompositeBandsProps(mapping, data.bands);
     const pipeline: RasterModule[] = [
       { module: CompositeBands, props: compositeProps },
     ];
+    if (hasAlpha) pipeline.push({ module: FilterTransparent });
 
     // Filter nodata BEFORE any rescale / gamma / colormap so the comparison
     // happens against the texture's native sample value. NaN nodata uses the
@@ -274,8 +283,9 @@ function buildRenderTile(
 export function buildRgbCompositeRenderTile(
   state: CogState,
   autoStats: AutoStats | null,
+  alphaBand: number | null = null,
 ) {
-  return buildRenderTile(state, autoStats, { kind: "rgb" });
+  return buildRenderTile(state, autoStats, { kind: "rgb" }, alphaBand);
 }
 
 /** Single-band renderTile. Uses CompositeBands to broadcast one band into
@@ -285,13 +295,15 @@ export function buildSingleCompositeRenderTile(
   state: CogState,
   colormapTexture: Texture,
   autoStats: AutoStats | null,
+  alphaBand: number | null = null,
 ) {
   const name = (state.colormap ?? "viridis").toLowerCase();
   const colormapIndex =
     (COLORMAP_INDEX as Record<string, number>)[name] ?? COLORMAP_INDEX.viridis;
-  return buildRenderTile(state, autoStats, {
-    kind: "single",
-    colormapTexture,
-    colormapIndex,
-  });
+  return buildRenderTile(
+    state,
+    autoStats,
+    { kind: "single", colormapTexture, colormapIndex },
+    alphaBand,
+  );
 }
