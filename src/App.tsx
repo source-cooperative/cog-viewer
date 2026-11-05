@@ -1,12 +1,18 @@
 import type { MapboxOverlayProps } from "@deck.gl/mapbox";
 import { MapboxOverlay } from "@deck.gl/mapbox";
-import { COGLayer, MultiCOGLayer } from "@developmentseed/deck.gl-geotiff";
+import {
+  COGLayer,
+  COGSource,
+  MultiCOGLayer,
+  MultiCOGSource,
+} from "@developmentseed/deck.gl-geotiff";
 import {
   createColormapTexture,
   decodeColormapSprite,
 } from "@developmentseed/deck.gl-raster/gpu-modules";
 import colormapsPngUrl from "@developmentseed/deck.gl-raster/gpu-modules/colormaps.png";
 import { ColorInterp, type GeoTIFF } from "@developmentseed/geotiff";
+import { epsgResolver as defaultEpsgResolver } from "@developmentseed/proj";
 import type { Device, Texture } from "@luma.gl/core";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -21,7 +27,6 @@ import { EmptyState } from "./components/EmptyState";
 import { FullscreenButton } from "./components/FullscreenButton";
 import { Toast, humanizeError } from "./components/Toast";
 import { isValidGeographicBounds } from "./geo/bounds";
-import { selectOverlayLayers } from "./geo/overlay-layers";
 import {
   buildRgbCompositeRenderTile,
   buildSingleCompositeRenderTile,
@@ -43,28 +48,17 @@ import {
 } from "./render/tile-loader";
 import { urlsKey, useCogState } from "./state/useCogState";
 
-// Get the default epsgResolver from COGLayer's defaultProps so the wrapper has
-// a stable identity (module scope = no re-creation on every render).
-// COGLayer.defaultProps is typed as typeof RasterTileLayer.defaultProps, which
-// doesn't expose epsgResolver, so we access it via any.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const _defaultEpsgResolver = (COGLayer as any).defaultProps.epsgResolver as (
-  epsg: number,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-) => Promise<any>;
-
 /**
  * epsg.io PROJJSON for projected CRS (e.g. ESRI:54009 World Mollweide) often
  * omits 'unit' from Cartesian axes.  wkt-parser then leaves `units` undefined,
- * causing COGLayer._parseGeoTIFF to throw "Source projection is missing
- * 'units' property" as an unhandled rejection — silently killing the layer.
- * For any EPSG-registered Cartesian projected system, metres is the correct
- * default when no unit is stated.
+ * so opening the source throws "Source projection is missing 'units'
+ * property". For any EPSG-registered Cartesian projected system, metres is
+ * the correct default when no unit is stated.
  */
 async function robustEpsgResolver(epsg: number) {
-  const proj = await _defaultEpsgResolver(epsg);
+  const proj = await defaultEpsgResolver(epsg);
   if ((!proj.units || proj.units === "unknown") && proj.projName !== "longlat") {
-    (proj as Record<string, unknown>).units = "m";
+    proj.units = "m";
   }
   return proj;
 }
@@ -142,19 +136,24 @@ export default function App() {
   const prefersDark = usePrefersDark();
   const [device, setDevice] = useState<Device | null>(null);
   const [colormapTexture, setColormapTexture] = useState<Texture | null>(null);
-  const [geotiff, setGeotiff] = useState<GeoTIFF | null>(null);
+  const [mapReady, setMapReady] = useState(false);
   const [autoStats, setAutoStats] = useState<AutoStats | null>(null);
   const [bandCount, setBandCount] = useState<number | null>(null);
   const [bandNames, setBandNames] = useState<Map<number, string> | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // False when the COG's geographic extent couldn't be determined (unresolved
-  // or unsupported CRS). Gates the tile layer off so we don't paint mislocated
-  // tiles alongside the "could not determine geographic extent" error — the
-  // tile-placement path clamps coordinates and would otherwise draw anyway.
-  // Starts true and resets to true on each URL load; only set to false inside
-  // onGeoTIFFLoad when bounds are proven invalid. The try/catch in DeckGLOverlay
-  // handles any transient beforeId crash from styledata races.
-  const [extentValid, setExtentValid] = useState(true);
+  // The opened COG(s) the layer draws. We open them ourselves (not via the
+  // layer) to pass robustEpsgResolver and the CORS workaround in loadGeoTIFF,
+  // and to check the extent first: a source with invalid bounds is never set,
+  // so mislocated tiles never paint under the "could not determine" error.
+  const [source, setSource] = useState<COGSource | MultiCOGSource | null>(null);
+  // The single-file GeoTIFF (for the controls panel), and the file auto-stats
+  // sample: the single file, or a multi-COG's first file.
+  const geotiff = source instanceof COGSource ? source.geotiff : null;
+  const statsTiff: GeoTIFF | null =
+    geotiff ??
+    (source instanceof MultiCOGSource
+      ? (source.geotiffs.values().next().value ?? null)
+      : null);
   // Non-blocking notice (e.g. a COG with no overviews) — rendered as an amber
   // Toast alongside the red error one; the two are mutually exclusive per load.
   const [warning, setWarning] = useState<string | null>(null);
@@ -178,18 +177,12 @@ export default function App() {
   // changes — which produce a new state object but the same URLs — do not
   // trigger spurious GeoTIFF reloads. See useCogState.ts for details.
   const cogUrlsKey = urlsKey(state);
-  // Stable sources/keys for multi-COG — memoized independently of autoStats
-  // so that MultiCOGLayer.updateState sees props.sources === oldProps.sources
-  // on every autoStats update, preventing an expensive re-open of all COG
-  // headers just to change the renderPipeline rescale step.
-  const multiSources = useMemo(() => {
-    if (state.urls.length <= 1) return null;
-    const keys = state.urls.map(urlKey);
-    const sources: Record<string, { url: string }> = {};
-    state.urls.forEach((url, i) => { sources[keys[i]] = { url }; });
-    return { sources, keys };
+  // Multi-COG band keys, one per URL, in URL order.
+  const keys = useMemo(
+    () => state.urls.map(urlKey),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cogUrlsKey]);
+    [cogUrlsKey],
+  );
 
   // Drop blob: URLs from prior drag-drop sessions on initial mount — they
   // can't survive a reload, so the map would otherwise show a stuck broken
@@ -208,30 +201,59 @@ export default function App() {
   // malformed Range headers and a full-file download. See load-geotiff.ts.
   useEffect(() => {
     urlZoomAtCogLoad.current = state.zoom;
-    setGeotiff(null);
+    setSource(null);
     setAutoStats(null);
     setBandCount(null);
     setBandNames(null);
     setError(null);
     setWarning(null);
-    setExtentValid(true);
     if (state.urls.length === 0) return;
     let cancelled = false;
+
+    // A COG's declared CRS may be missing, unrecognized, or otherwise fail to
+    // reproject cleanly to WGS84 — that yields NaN/Infinity or raw
+    // projected-CRS values instead of real lng/lat. Feeding those into
+    // fitBounds throws an uncaught "Invalid LngLat" deep inside maplibre-gl,
+    // so bail out with a clear message instead.
+    const acceptBounds = (s: COGSource | MultiCOGSource): boolean => {
+      if (isValidGeographicBounds(s.geographicBounds)) return true;
+      setError(
+        "Could not determine this COG's geographic extent — its " +
+          "coordinate reference system may be missing or unsupported.",
+      );
+      return false;
+    };
+
     if (state.urls.length > 1) {
-      // Multi-COG: MultiCOGLayer handles tile fetching for all sources.
-      // Load the primary source here only to compute auto-stats so the
-      // renderPipeline can include a LinearRescale step.
+      // Multi-COG: one band per file.
       const ctrl = new AbortController();
       (async () => {
         try {
-          const tiff = await loadGeoTIFF(normalizeUrl(state.urls[0]));
+          const tiffs = await Promise.all(
+            state.urls.map((u) => loadGeoTIFF(normalizeUrl(u))),
+          );
           if (cancelled) return;
-          const stats = await computeAutoStats(tiff, ctrl.signal, (partial) => {
-            if (!ctrl.signal.aborted) setAutoStats(partial);
-          });
-          if (!ctrl.signal.aborted) setAutoStats(stats);
+          // Same up-front COG check as the single-file path (see below).
+          const issues = tiffs.map(validateCog);
+          const fatal = issues.find((i) => i?.level === "error");
+          if (fatal) {
+            setError(fatal.message);
+            return;
+          }
+          const warn = issues.find((i) => i?.level === "warning");
+          if (warn) setWarning(warn.message);
+          const multi = await MultiCOGSource.open(
+            Object.fromEntries(keys.map((k, i) => [k, tiffs[i]])),
+            { epsgResolver: robustEpsgResolver, signal: ctrl.signal },
+          );
+          if (cancelled || !acceptBounds(multi)) return;
+          setBandCount(multi.geotiffs.size);
+          setSource(multi);
         } catch (err) {
-          if (!cancelled) console.warn("multi-COG auto-stats failed", err);
+          if (!cancelled) {
+            console.error("multi-COG load failed", err);
+            setError(humanizeError(err));
+          }
         }
       })();
       return () => {
@@ -254,7 +276,13 @@ export default function App() {
           return;
         }
         if (issue?.level === "warning") setWarning(issue.message);
-        setGeotiff(tiff);
+        const single = await COGSource.open(tiff, {
+          epsgResolver: robustEpsgResolver,
+        });
+        if (cancelled || !acceptBounds(single)) return;
+        setBandCount(tiff.count);
+        setBandNames(readBandNames(tiff));
+        setSource(single);
       } catch (err) {
         if (!cancelled) {
           console.error("loadGeoTIFF failed", err);
@@ -281,9 +309,8 @@ export default function App() {
     return () => setTileErrorHandler(null);
   }, []);
 
-  // _parseGeoTIFF in deck.gl-geotiff has incomplete error handling — errors
-  // after fetchGeoTIFF (CRS parsing, epsgResolver, units check) become
-  // unhandled promise rejections. Catch them here and show as a toast.
+  // Safety net: show any stray async failure as a toast instead of failing
+  // silently. Layer errors arrive through the layers' onError prop.
   useEffect(() => {
     const handle = (e: PromiseRejectionEvent) => {
       console.error("[cog-viewer] Unhandled rejection:", e.reason);
@@ -293,13 +320,26 @@ export default function App() {
     return () => window.removeEventListener("unhandledrejection", handle);
   }, []);
 
-  // When we have a GeoTIFF for the current URL, compute auto-stats once.
+  // Fit the map to the opened COG once per load. Waits for the map: it loads
+  // maplibre-gl asynchronously, so mapRef can still be null when the source
+  // opens. Skipped when the URL already encodes a viewport (shared link).
   useEffect(() => {
-    if (!geotiff) return;
+    if (!source || !mapReady || urlZoomAtCogLoad.current !== null) return;
+    const { west, south, east, north } = source.geographicBounds;
+    mapRef.current?.fitBounds(
+      [[west, south], [east, north]],
+      { padding: 40, duration: 0 },
+    );
+  }, [source, mapReady]);
+
+  // Once the COG(s) are open, compute auto-stats once. Multi-COG takes them
+  // from the first file so the renderPipeline can include a LinearRescale step.
+  useEffect(() => {
+    if (!statsTiff) return;
     const ctrl = new AbortController();
     (async () => {
       try {
-        const stats = await computeAutoStats(geotiff, ctrl.signal, (partial) => {
+        const stats = await computeAutoStats(statsTiff, ctrl.signal, (partial) => {
           if (!ctrl.signal.aborted) setAutoStats(partial);
         });
         if (!ctrl.signal.aborted) setAutoStats(stats);
@@ -308,7 +348,7 @@ export default function App() {
       }
     })();
     return () => ctrl.abort();
-  }, [geotiff]);
+  }, [statsTiff]);
 
   // After bandCount resolves for a single-file COG, fire a one-shot auto-pick
   // of mode + bands when the user hasn't set them. Not used for multi-COG
@@ -349,44 +389,15 @@ export default function App() {
       state.basemap !== "satellite" && state.basemap !== "off";
     const beforeId =
       state.labelsAbove && labelsAvailable ? firstSymbolId : undefined;
-
-    const handleBoundsLoad = (geographicBounds: {
-      west: number; south: number; east: number; north: number;
-    }) => {
-      if (!isValidGeographicBounds(geographicBounds)) {
-        // A COG's declared CRS may be missing, unrecognized, or otherwise
-        // fail to reproject cleanly to WGS84 — that yields NaN/Infinity or
-        // raw projected-CRS values instead of real lng/lat. Feeding those
-        // into fitBounds throws an uncaught "Invalid LngLat" deep inside
-        // maplibre-gl, so bail out with a clear message instead. Also drop
-        // the tile layer (via extentValid) so we don't paint mislocated
-        // tiles under that error — the library's tile-placement path clamps
-        // coordinates and would otherwise keep drawing.
-        setError(
-          "Could not determine this COG's geographic extent — its " +
-            "coordinate reference system may be missing or unsupported.",
-        );
-        setExtentValid(false);
-        return;
-      }
-      // CRS resolved and bounds are valid — now safe to add the tile layer
-      // to the MapLibre stack (beforeId won't be stale at this point).
-      setExtentValid(true);
-      // Skip fitBounds when the URL already encodes a viewport (shared link).
-      if (urlZoomAtCogLoad.current !== null) return;
-      const { west, south, east, north } = geographicBounds;
-      mapRef.current?.fitBounds(
-        [[west, south], [east, north]],
-        { padding: 40, duration: 0 },
-      );
+    // deck.gl reports layer failures (e.g. "Can't draw the source") here, not
+    // as rejections; without it they only reach the console.
+    const onError = (err: Error) => {
+      console.error("[cog-viewer] layer error:", err);
+      setError((prev) => prev ?? humanizeError(err));
     };
 
-    // Multi-COG path: each URL is one source (one band from a separate file).
-    // Uses the stable multiSources object (memoized on cogUrlsKey only) so
-    // that autoStats updates change only the renderPipeline without
-    // triggering a MultiCOGLayer source re-open.
-    if (multiSources) {
-      const { sources, keys } = multiSources;
+    // Multi-COG path: each URL is one band from a separate file.
+    if (source instanceof MultiCOGSource) {
       const bands = state.bands ?? [1, 2, 3];
       const composite = {
         r: keys[(bands[0] ?? 1) - 1] ?? keys[0],
@@ -424,32 +435,21 @@ export default function App() {
         ? [{ module: PerBandLinearRescale, props: rescaleProps }]
         : [];
       pushAdjustments(state, renderPipeline);
-      const multiProps = {
+      return new MultiCOGLayer({
         id: "multi-cog",
-        sources,
+        source,
         composite,
-        epsgResolver: robustEpsgResolver,
         opacity: state.opacity,
-        beforeId,
+        ...{ beforeId }, // @deck.gl/mapbox interleaved prop, not in the layer types
         renderPipeline,
         maxCacheByteSize: MAX_CACHE_BYTE_SIZE,
         refinementStrategy: keepDrawnTiles,
-        onGeoTIFFLoad: (
-          sourcesMap: Map<string, GeoTIFF>,
-          options: { geographicBounds: { west: number; south: number; east: number; north: number } },
-        ) => {
-          setBandCount(sourcesMap.size);
-          handleBoundsLoad(options.geographicBounds);
-        },
-      };
-      return new MultiCOGLayer(multiProps);
+        onError,
+      });
     }
 
-    // Single-COG path: wait until we've constructed the GeoTIFF with our own
-    // chunk size. The URL-only fast path is intentionally gone — see the
-    // workaround comment on load-geotiff.ts for why we hand a pre-built
-    // GeoTIFF instance to COGLayer.
-    if (!geotiff) return null;
+    // Single-COG path: wait until the load effect has opened the source.
+    if (!source) return null;
 
     // Always mount the custom path (stable id "cog") so the tile cache
     // survives every mode/band/rescale/colormap toggle. Single-band mode
@@ -457,7 +457,7 @@ export default function App() {
     // fall back to RGB rendering until that's ready.
     // 1-based index of the band tagged as alpha (TIFF ExtraSamples), or null.
     const alphaBand =
-      geotiff.colorInterp.indexOf(ColorInterp.ALPHA) + 1 || null;
+      source.geotiff.colorInterp.indexOf(ColorInterp.ALPHA) + 1 || null;
     const renderTile =
       state.mode === "single" && colormapTexture
         ? buildSingleCompositeRenderTile(
@@ -468,10 +468,9 @@ export default function App() {
           )
         : buildRgbCompositeRenderTile(state, autoStats, alphaBand);
 
-    const cogProps = {
+    return new COGLayer({
       id: "cog",
-      geotiff,
-      epsgResolver: robustEpsgResolver,
+      source,
       ...(state.urls[0] && isSourceCoopUrl(state.urls[0]) ? { maxRequests: 20 } : {}),
       opacity: state.opacity,
       maxCacheByteSize: MAX_CACHE_BYTE_SIZE,
@@ -479,27 +478,13 @@ export default function App() {
       getTileData,
       onTileUnload: destroyTileTextures,
       renderTile,
-      beforeId,
-      onError: (err: unknown) => {
-        setError((prev) => prev ?? humanizeError(err));
-      },
-      onGeoTIFFLoad: (
-        tiff: GeoTIFF,
-        options: {
-          geographicBounds: { west: number; south: number; east: number; north: number };
-        },
-      ) => {
-        setBandCount(tiff.count);
-        setBandNames(readBandNames(tiff));
-        handleBoundsLoad(options.geographicBounds);
-      },
-    };
-    return new COGLayer(cogProps);
+      onError,
+      ...{ beforeId }, // @deck.gl/mapbox interleaved prop, not in the layer types
+    });
   }, [
-    geotiff,
+    source,
+    keys,
     autoStats,
-    multiSources,
-    cogUrlsKey,
     state.opacity,
     state.mode,
     state.bands,
@@ -532,6 +517,7 @@ export default function App() {
           zoom: state.zoom ?? 2,
         }}
         mapStyle={resolveBasemap(state.basemap, prefersDark)}
+        onLoad={() => setMapReady(true)}
         onMoveEnd={(e) => {
           const { longitude, latitude, zoom } = e.viewState;
           update({ longitude, latitude, zoom });
@@ -546,7 +532,7 @@ export default function App() {
         }}
       >
         <DeckGLOverlay
-          layers={selectOverlayLayers(layer, extentValid)}
+          layers={layer ? [layer] : []}
           interleaved
           onDeviceInitialized={setDevice}
         />
