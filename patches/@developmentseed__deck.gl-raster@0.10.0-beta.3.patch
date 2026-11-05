@@ -1,5 +1,5 @@
 diff --git a/dist/raster-layer.js b/dist/raster-layer.js
-index 55e4fa8da199a46eb57547654e1edde0cbcf064f..185e53c9b720e2aa9839b1d8cbce312802ec8a82 100644
+index 55e4fa8da199a46eb57547654e1edde0cbcf064f..1e65c2044243d788a0c38a7daffc06964557264e 100644
 --- a/dist/raster-layer.js
 +++ b/dist/raster-layer.js
 @@ -112,24 +112,41 @@ export class RasterLayer extends CompositeLayer {
@@ -72,11 +72,13 @@ index 55e4fa8da199a46eb57547654e1edde0cbcf064f..185e53c9b720e2aa9839b1d8cbce3128
          // When `_wrapX` is set, the mesh may run past the world's edge.
          //
          // We need to cut it on the world's edge, so each part is drawn inside the
-@@ -262,3 +274,89 @@ function meshToBuffers(mesh) {
+@@ -261,4 +273,89 @@ function meshToBuffers(mesh) {
+         texCoords,
      };
  }
- //# sourceMappingURL=raster-layer.js.map
-+// cog-viewer patch: border tiles of bounded CRSs (e.g. Mollweide).
+-//# sourceMappingURL=raster-layer.js.map
+\ No newline at end of file
++//# sourceMappingURL=raster-layer.js.map// cog-viewer patch: border tiles of bounded CRSs (e.g. Mollweide).
 +const BORDER_GRID_SIZE = 64;
 +const BORDER_EDGE_SAMPLES = 16;
 +/**
@@ -162,25 +164,3 @@ index 55e4fa8da199a46eb57547654e1edde0cbcf064f..185e53c9b720e2aa9839b1d8cbce3128
 +    }
 +    return { positions, uvs, triangles };
 +}
-diff --git a/dist/raster-tileset/raster-tileset-2d.js b/dist/raster-tileset/raster-tileset-2d.js
-index 8d3d87ed30153eeda5e597a8dc24a3724a7fd547..44cd1c201bef5c9bdc1ecc63686f0155f9e26700 100644
---- a/dist/raster-tileset/raster-tileset-2d.js
-+++ b/dist/raster-tileset/raster-tileset-2d.js
-@@ -170,9 +170,15 @@ export class RasterTileset2D extends Tileset2D {
-         // a hair above a whole number (e.g. 2.000000000000004), which would floor
-         // an exact multiple like 2 / 2.000000000000004 down to the wrong parent.
-         // Add the same tolerance the traversal uses at tile edges before flooring.
-+        // Use the child's centre, not its top-left corner. Overviews whose
-+        // sizes were rounded down (e.g. 771 -> 1543 px) give a decimation a
-+        // hair above 2, so tiles don't nest exactly; the corner then falls into
-+        // the left/top neighbour and the "parent" placeholder is drawn over the
-+        // wrong tile, leaving a hole. The centre picks the parent covering most
-+        // of the child, and is exact for integer decimation.
-         return {
--            x: Math.floor(index.x / decimationX + TILE_EDGE_TOLERANCE),
--            y: Math.floor(index.y / decimationY + TILE_EDGE_TOLERANCE),
-+            x: Math.floor((index.x + 0.5) / decimationX),
-+            y: Math.floor((index.y + 0.5) / decimationY),
-             z: index.z - 1,
-         };
-     }
