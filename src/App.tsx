@@ -36,6 +36,7 @@ import {
 import { keepDrawnTiles } from "./render/refinement";
 import { PerBandLinearRescale } from "./render/shader-modules";
 import {
+  destroyTileTextures,
   makeMultiBandTileLoader,
   MAX_BAND_SLOTS,
   setTileErrorHandler,
@@ -468,6 +469,7 @@ export default function App() {
       maxCacheByteSize: MAX_CACHE_BYTE_SIZE,
       refinementStrategy: keepDrawnTiles,
       getTileData,
+      onTileUnload: destroyTileTextures,
       renderTile,
       beforeId,
       onError: (err: unknown) => {
