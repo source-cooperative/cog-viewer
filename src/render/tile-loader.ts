@@ -19,7 +19,7 @@ const IDENTITY_UV: UvTransform = [0, 0, 1, 1];
 
 /**
  * Module-level reporter for tile fetch/decode failures. `getTileData` is
- * created once at module scope (App keeps its identity stable so deck.gl's
+ * created at module scope (App memoises one per alpha band index so deck.gl's
  * TileLayer doesn't invalidate its cache), so it can't close over React's
  * `setError`. Instead the app registers a handler here — mirroring the
  * module-scope `SourceHttp.fetch` override in load-geotiff.ts.
@@ -159,7 +159,10 @@ export function makeMultiBandTileLoader(bandIndexes: number[]) {
             : extractBand(array.data as RasterTypedArray, i, array.count);
         const format = singleBandFormat(bandData);
         const data = coerceForFormat(bandData, format);
-        sampleScale = sampleScaleForFormat(format);
+        // Take the scale from the first band uploaded (a colour band), not
+        // the last: an alpha band appended past MAX_BAND_SLOTS mustn't decide
+        // how colour-band nodata/rescale values are normalised.
+        if (bands.size === 0) sampleScale = sampleScaleForFormat(format);
         const texture = device.createTexture({
           data,
           format,

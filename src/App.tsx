@@ -97,13 +97,12 @@ const FETCHED_BANDS = Array.from({ length: MAX_BAND_SLOTS }, (_, i) => i + 1);
 // MAX_BAND_SLOTS bands (e.g. R,G,B,NIR,Alpha) still upload it.
 const tileLoaders = new Map<number | null, ReturnType<typeof makeMultiBandTileLoader>>();
 function getTileLoader(alphaBand: number | null) {
-  let loader = tileLoaders.get(alphaBand);
+  // An alpha within FETCHED_BANDS is already fetched, so share the default loader.
+  const extra = alphaBand && alphaBand > MAX_BAND_SLOTS ? alphaBand : null;
+  let loader = tileLoaders.get(extra);
   if (!loader) {
-    const bands = alphaBand && !FETCHED_BANDS.includes(alphaBand)
-      ? [...FETCHED_BANDS, alphaBand]
-      : FETCHED_BANDS;
-    loader = makeMultiBandTileLoader(bands);
-    tileLoaders.set(alphaBand, loader);
+    loader = makeMultiBandTileLoader(extra ? [...FETCHED_BANDS, extra] : FETCHED_BANDS);
+    tileLoaders.set(extra, loader);
   }
   return loader;
 }

@@ -64,3 +64,27 @@ describe("makeMultiBandTileLoader — abort handling", () => {
     expect(handler).toHaveBeenCalledWith(networkError);
   });
 });
+
+describe("makeMultiBandTileLoader — bands past MAX_BAND_SLOTS", () => {
+  it("uploads an alpha band that sits at index 5 (R,G,B,NIR,Alpha)", async () => {
+    // 1×1 pixel-interleaved tile with 5 samples; alpha (band 5) is 0.
+    const array = {
+      layout: "pixel-interleaved",
+      data: new Uint8Array([10, 20, 30, 40, 0]),
+      count: 5,
+      width: 1,
+      height: 1,
+      nodata: null,
+    };
+    const image = makeImage(async () => ({ array }));
+    const createTexture = vi.fn((opts: { data: Uint8Array }) => ({ data: opts.data }));
+    const loader = makeMultiBandTileLoader([1, 2, 3, 4, 5]);
+
+    const result = await loader(image, makeOpts({ device: { createTexture } }));
+
+    expect([...result.bands.keys()]).toEqual(["1", "2", "3", "4", "5"]);
+    expect(createTexture).toHaveBeenCalledTimes(5);
+    expect(Array.from(createTexture.mock.calls[4][0].data)).toEqual([0]);
+    expect(result.sampleScale).toBe(255);
+  });
+});
