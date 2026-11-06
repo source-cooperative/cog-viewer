@@ -1,8 +1,9 @@
 import { TiffTag } from "@cogeotiff/core";
-import type {
-  GeoTIFF,
-  Overview,
-  RasterArray,
+import {
+  defaultDecoderPool,
+  type GeoTIFF,
+  type Overview,
+  type RasterArray,
 } from "@developmentseed/geotiff";
 
 /**
@@ -225,7 +226,7 @@ async function streamingFromTiles(
 
   // Fire every fetch up front; bin in order so progress stays incremental.
   const pending = coords.map(([x, y]) =>
-    source.fetchTile(x, y, { signal, boundless: false }),
+    source.fetchTile(x, y, { signal, pool: defaultDecoderPool(), boundless: false }),
   );
   // An early throw leaves the rest unawaited; swallow them to avoid unhandled rejections.
   for (const p of pending) p.catch(() => {});
@@ -283,7 +284,7 @@ async function batchFromTiles(
   const tiles: RasterArray[] = (
     await Promise.all(
       coords.map(([x, y]) =>
-        source.fetchTile(x, y, { signal, boundless: false }),
+        source.fetchTile(x, y, { signal, pool: defaultDecoderPool(), boundless: false }),
       ),
     )
   ).map((t) => t.array);
