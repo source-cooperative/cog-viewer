@@ -492,11 +492,8 @@ export function ControlsPanel({
   // that in the UI so the band picker doesn't disappear.
   const effectiveMode: Mode = state.mode ?? "rgb";
   const effectiveBands = state.bands ?? [1, 2, 3];
-  // CompositeBands has 4 slots; we always fetch the first up-to-4 bands so
-  // users can freely swap among them. Bands beyond that aren't reachable
-  // without a re-fetch, so we hide them from the picker.
   const bandOptions = Array.from(
-    { length: Math.min(bandCount ?? MAX_BAND_SLOTS, MAX_BAND_SLOTS) },
+    { length: bandCount ?? MAX_BAND_SLOTS },
     (_, i) => i + 1,
   );
 

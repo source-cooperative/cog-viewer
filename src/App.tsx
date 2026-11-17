@@ -92,17 +92,24 @@ function DeckGLOverlay(
 // TileLayer treats a changed getTileData reference as cache-invalidating, so
 // allocating a fresh closure per render would defeat the stable-id design and
 // refetch tiles on every state change (opacity drag, band swap, etc.).
-const FETCHED_BANDS = Array.from({ length: MAX_BAND_SLOTS }, (_, i) => i + 1);
-// One loader per alpha band index, so files whose alpha sits past the first
-// MAX_BAND_SLOTS bands (e.g. R,G,B,NIR,Alpha) still upload it.
-const tileLoaders = new Map<number | null, ReturnType<typeof makeMultiBandTileLoader>>();
-function getTileLoader(alphaBand: number | null) {
-  // An alpha within FETCHED_BANDS is already fetched, so share the default loader.
-  const extra = alphaBand && alphaBand > MAX_BAND_SLOTS ? alphaBand : null;
-  let loader = tileLoaders.get(extra);
+// Keyed by a sorted comma-joined band list so the cache is stable for the same
+// selection but invalidates when the user picks a different band set.
+const tileLoaders = new Map<string, ReturnType<typeof makeMultiBandTileLoader>>();
+function getTileLoader(selectedBands: number[], alphaBand: number | null) {
+  // Always include bands 1–MAX_BAND_SLOTS so the user can swap R/G/B among the
+  // common defaults without a re-fetch. Any selected band beyond that is added
+  // so it's available to the render pipeline.
+  const bandSet = new Set<number>(
+    Array.from({ length: MAX_BAND_SLOTS }, (_, i) => i + 1),
+  );
+  for (const b of selectedBands) bandSet.add(b);
+  if (alphaBand !== null && alphaBand > 0) bandSet.add(alphaBand);
+  const bandsToFetch = [...bandSet].sort((a, b) => a - b);
+  const key = bandsToFetch.join(",");
+  let loader = tileLoaders.get(key);
   if (!loader) {
-    loader = makeMultiBandTileLoader(extra ? [...FETCHED_BANDS, extra] : FETCHED_BANDS);
-    tileLoaders.set(extra, loader);
+    loader = makeMultiBandTileLoader(bandsToFetch);
+    tileLoaders.set(key, loader);
   }
   return loader;
 }
@@ -487,7 +494,7 @@ export default function App() {
       opacity: state.opacity,
       maxCacheByteSize: MAX_CACHE_BYTE_SIZE,
       refinementStrategy: keepDrawnTiles,
-      getTileData: getTileLoader(alphaBand),
+      getTileData: getTileLoader(state.bands ?? [1, 2, 3], alphaBand),
       onTileUnload: destroyTileTextures,
       renderTile,
       onError,
