@@ -1,6 +1,7 @@
 import { COLORMAP_INDEX } from "@developmentseed/deck.gl-raster/gpu-modules";
 import colormapsPngUrl from "@developmentseed/deck.gl-raster/gpu-modules/colormaps.png";
 import type { GeoTIFF } from "@developmentseed/geotiff";
+import { useEffect, useRef, useState } from "react";
 import { ColormapPicker, type ColormapOption } from "./ColormapPicker";
 import { InfoIcon, Tooltip } from "./Tooltip";
 import {
@@ -162,6 +163,59 @@ function fmt(n: number): number {
   return Number(n.toPrecision(4));
 }
 
+/** Numeric input that buffers the raw string locally so the user can type
+ * intermediate states like "-" or "1." without the controlled value snapping
+ * back. Propagates onChange only when the string is a valid finite number;
+ * re-syncs to the parent value when it changes externally (e.g. a preset). */
+function NumericInput({
+  ariaLabel,
+  value,
+  onChange,
+}: {
+  ariaLabel: string;
+  value: number;
+  onChange: (n: number) => void;
+}) {
+  const [raw, setRaw] = useState(() => String(fmt(value)));
+  // Track the last value we propagated up so we don't re-sync when the parent
+  // echoes our own onChange back down.
+  const lastPropagated = useRef(value);
+
+  useEffect(() => {
+    if (value !== lastPropagated.current) {
+      lastPropagated.current = value;
+      setRaw(String(fmt(value)));
+    }
+  }, [value]);
+
+  return (
+    <input
+      aria-label={ariaLabel}
+      type="number"
+      step="any"
+      value={raw}
+      onChange={(e) => {
+        setRaw(e.target.value);
+        const n = parseFloat(e.target.value);
+        if (Number.isFinite(n)) {
+          lastPropagated.current = n;
+          onChange(n);
+        }
+      }}
+      onBlur={() => {
+        const n = parseFloat(raw);
+        if (Number.isFinite(n)) {
+          lastPropagated.current = n;
+          onChange(n);
+          setRaw(String(fmt(n)));
+        } else {
+          setRaw(String(fmt(value)));
+        }
+      }}
+    />
+  );
+}
+
 type RescaleRowProps = {
   stats: BandStats | null;
   value: [number, number];
@@ -213,19 +267,15 @@ function RescaleRow({
             {label}
           </span>
         )}
-        <input
-          aria-label={`${ariaPrefix}-min`}
-          type="number"
-          step="any"
-          value={fmt(value[0])}
-          onChange={(e) => onChange([Number(e.target.value), value[1]])}
+        <NumericInput
+          ariaLabel={`${ariaPrefix}-min`}
+          value={value[0]}
+          onChange={(n) => onChange([n, value[1]])}
         />
-        <input
-          aria-label={`${ariaPrefix}-max`}
-          type="number"
-          step="any"
-          value={fmt(value[1])}
-          onChange={(e) => onChange([value[0], Number(e.target.value)])}
+        <NumericInput
+          ariaLabel={`${ariaPrefix}-max`}
+          value={value[1]}
+          onChange={(n) => onChange([value[0], n])}
         />
       </div>
     </div>
@@ -492,11 +542,8 @@ export function ControlsPanel({
   // that in the UI so the band picker doesn't disappear.
   const effectiveMode: Mode = state.mode ?? "rgb";
   const effectiveBands = state.bands ?? [1, 2, 3];
-  // CompositeBands has 4 slots; we always fetch the first up-to-4 bands so
-  // users can freely swap among them. Bands beyond that aren't reachable
-  // without a re-fetch, so we hide them from the picker.
   const bandOptions = Array.from(
-    { length: Math.min(bandCount ?? MAX_BAND_SLOTS, MAX_BAND_SLOTS) },
+    { length: bandCount ?? MAX_BAND_SLOTS },
     (_, i) => i + 1,
   );
 
