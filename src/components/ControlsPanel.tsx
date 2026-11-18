@@ -617,6 +617,19 @@ export function ControlsPanel({
                           key={label}
                           aria-label={`band-${label.toLowerCase()}`}
                           value={effectiveBands[i] ?? bandOptions[0]}
+                          onKeyDown={(e) => {
+                            if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+                              e.preventDefault();
+                              const current =
+                                effectiveBands[i] ?? bandOptions[0];
+                              const next = [...effectiveBands];
+                              next[i] =
+                                e.key === "ArrowUp"
+                                  ? Math.min(bandOptions.length, current + 1)
+                                  : Math.max(1, current - 1);
+                              update({ bands: next });
+                            }
+                          }}
                           onChange={(e) => {
                             const next = [...effectiveBands];
                             next[i] = Number(e.target.value);
@@ -639,6 +652,19 @@ export function ControlsPanel({
                     <select
                       aria-label="band"
                       value={effectiveBands[0] ?? 1}
+                      onKeyDown={(e) => {
+                        if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+                          e.preventDefault();
+                          const current = effectiveBands[0] ?? 1;
+                          update({
+                            bands: [
+                              e.key === "ArrowUp"
+                                ? Math.min(bandOptions.length, current + 1)
+                                : Math.max(1, current - 1),
+                            ],
+                          });
+                        }
+                      }}
                       onChange={(e) =>
                         update({ bands: [Number(e.target.value)] })
                       }
