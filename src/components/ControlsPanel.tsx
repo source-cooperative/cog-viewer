@@ -624,7 +624,7 @@ export function ControlsPanel({
                                 effectiveBands[i] ?? bandOptions[0];
                               const next = [...effectiveBands];
                               next[i] =
-                                e.key === "ArrowUp"
+                                e.key === "ArrowDown"
                                   ? Math.min(bandOptions.length, current + 1)
                                   : Math.max(1, current - 1);
                               update({ bands: next });
@@ -658,7 +658,7 @@ export function ControlsPanel({
                           const current = effectiveBands[0] ?? 1;
                           update({
                             bands: [
-                              e.key === "ArrowUp"
+                              e.key === "ArrowDown"
                                 ? Math.min(bandOptions.length, current + 1)
                                 : Math.max(1, current - 1),
                             ],

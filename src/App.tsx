@@ -102,7 +102,20 @@ function getTileLoader(selectedBands: number[], alphaBand: number | null) {
   const bandSet = new Set<number>(
     Array.from({ length: MAX_BAND_SLOTS }, (_, i) => i + 1),
   );
-  for (const b of selectedBands) bandSet.add(b);
+  for (const b of selectedBands) {
+    bandSet.add(b);
+    // Pre-fetch the entire slot-group that contains b (groups of MAX_BAND_SLOTS
+    // starting at band 1: 1-4, 5-8, 9-12, …). This means single-step arrow-key
+    // navigation within a group hits the tile cache instead of triggering a
+    // re-fetch on every keypress.
+    if (b > MAX_BAND_SLOTS) {
+      const groupStart =
+        Math.floor((b - 1) / MAX_BAND_SLOTS) * MAX_BAND_SLOTS + 1;
+      for (let i = groupStart; i < groupStart + MAX_BAND_SLOTS; i++) {
+        bandSet.add(i);
+      }
+    }
+  }
   if (alphaBand !== null && alphaBand > 0) bandSet.add(alphaBand);
   const bandsToFetch = [...bandSet].sort((a, b) => a - b);
   const key = bandsToFetch.join(",");
